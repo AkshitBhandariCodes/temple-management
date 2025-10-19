@@ -1,0 +1,373 @@
+// MongoDB Demo Data Setup Script - FIXED VERSION
+// Run this in your MongoDB shell to create demo users and communities
+
+// 1. Create demo users (with upsert to handle existing data)
+db.users.updateOne(
+  { id: 'user-001' },
+  {
+    $set: {
+      id: 'user-001',
+      email: 'admin@temple.com',
+      password: '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi', // "password123" hashed
+      full_name: 'Temple Administrator',
+      phone: '+1234567890',
+      is_active: true,
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  },
+  { upsert: true }
+);
+
+db.users.updateOne(
+  { id: 'user-002' },
+  {
+    $set: {
+      id: 'user-002',
+      email: 'manager@temple.com',
+      password: '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi',
+      full_name: 'Community Manager',
+      phone: '+1234567891',
+      is_active: true,
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  },
+  { upsert: true }
+);
+
+db.users.updateOne(
+  { id: 'user-003' },
+  {
+    $set: {
+      id: 'user-003',
+      email: 'finance@temple.com',
+      password: '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi',
+      full_name: 'Finance Manager',
+      phone: '+1234567892',
+      is_active: true,
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  },
+  { upsert: true }
+);
+
+db.users.updateOne(
+  { id: 'user-004' },
+  {
+    $set: {
+      id: 'user-004',
+      email: 'volunteer@temple.com',
+      password: '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi',
+      full_name: 'Volunteer Coordinator',
+      phone: '+1234567893',
+      is_active: true,
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  },
+  { upsert: true }
+);
+
+db.users.updateOne(
+  { id: 'user-005' },
+  {
+    $set: {
+      id: 'user-005',
+      email: 'devotee@temple.com',
+      password: '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi',
+      full_name: 'Devotee Member',
+      phone: '+1234567894',
+      is_active: true,
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  },
+  { upsert: true }
+);
+
+// 2. Create user roles (with upsert)
+db.user_roles.updateOne(
+  { id: 'role-001' },
+  {
+    $set: {
+      id: 'role-001',
+      user_id: 'user-001',
+      role: 'super_admin',
+      permissions: ['users.read', 'users.write', 'users.delete', 'communities.read', 'communities.write', 'communities.delete', 'donations.read', 'donations.write', 'donations.delete', 'expenses.read', 'expenses.write', 'expenses.delete', 'events.read', 'events.write', 'events.delete', 'volunteers.read', 'volunteers.write', 'volunteers.delete', 'pujas.read', 'pujas.write', 'pujas.delete', 'reports.read', 'reports.write', 'reports.delete', 'settings.read', 'settings.write', 'settings.delete'],
+      is_active: true,
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  },
+  { upsert: true }
+);
+
+db.user_roles.updateOne(
+  { id: 'role-002' },
+  {
+    $set: {
+      id: 'role-002',
+      user_id: 'user-002',
+      role: 'temple_manager',
+      permissions: ['communities.read', 'communities.write', 'events.read', 'events.write', 'volunteers.read', 'volunteers.write'],
+      is_active: true,
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  },
+  { upsert: true }
+);
+
+db.user_roles.updateOne(
+  { id: 'role-003' },
+  {
+    $set: {
+      id: 'role-003',
+      user_id: 'user-003',
+      role: 'finance_manager',
+      permissions: ['donations.read', 'donations.write', 'expenses.read', 'expenses.write', 'reports.read'],
+      is_active: true,
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  },
+  { upsert: true }
+);
+
+db.user_roles.updateOne(
+  { id: 'role-004' },
+  {
+    $set: {
+      id: 'role-004',
+      user_id: 'user-004',
+      role: 'volunteer',
+      permissions: ['events.read', 'volunteers.read'],
+      is_active: true,
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  },
+  { upsert: true }
+);
+
+db.user_roles.updateOne(
+  { id: 'role-005' },
+  {
+    $set: {
+      id: 'role-005',
+      user_id: 'user-005',
+      role: 'user',
+      permissions: ['communities.read', 'events.read', 'donations.read'],
+      is_active: true,
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  },
+  { upsert: true }
+);
+
+// 3. Create demo communities (with upsert and proper slug generation)
+db.communities.updateOne(
+  { id: 'community-001' },
+  {
+    $set: {
+      id: 'community-001',
+      name: 'Sri Ganesha Devotees',
+      slug: 'sri-ganesha-devotees',
+      description: 'A vibrant community of devotees dedicated to Lord Ganesha worship and cultural activities.',
+      status: 'active',
+      logo_url: '/placeholder.svg',
+      owner_id: 'user-002',
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  },
+  { upsert: true }
+);
+
+db.communities.updateOne(
+  { id: 'community-002' },
+  {
+    $set: {
+      id: 'community-002',
+      name: 'Temple Youth Group',
+      slug: 'temple-youth-group',
+      description: 'Young devotees connecting through spiritual activities, community service, and cultural programs.',
+      status: 'active',
+      logo_url: '/placeholder.svg',
+      owner_id: 'user-004',
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  },
+  { upsert: true }
+);
+
+db.communities.updateOne(
+  { id: 'community-003' },
+  {
+    $set: {
+      id: 'community-003',
+      name: 'Sanskrit Study Circle',
+      slug: 'sanskrit-study-circle',
+      description: 'Learn and study ancient Sanskrit texts, chants, and spiritual literature together.',
+      status: 'active',
+      logo_url: '/placeholder.svg',
+      owner_id: 'user-005',
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  },
+  { upsert: true }
+);
+
+// 4. Add members to communities (with upsert)
+db.community_members.updateOne(
+  { id: 'member-001' },
+  {
+    $set: {
+      id: 'member-001',
+      community_id: 'community-001',
+      user_id: 'user-001',
+      role: 'admin',
+      joined_at: new Date(),
+      is_active: true
+    }
+  },
+  { upsert: true }
+);
+
+db.community_members.updateOne(
+  { id: 'member-002' },
+  {
+    $set: {
+      id: 'member-002',
+      community_id: 'community-001',
+      user_id: 'user-002',
+      role: 'owner',
+      joined_at: new Date(),
+      is_active: true
+    }
+  },
+  { upsert: true }
+);
+
+db.community_members.updateOne(
+  { id: 'member-004' },
+  {
+    $set: {
+      id: 'member-004',
+      community_id: 'community-002',
+      user_id: 'user-004',
+      role: 'owner',
+      joined_at: new Date(),
+      is_active: true
+    }
+  },
+  { upsert: true }
+);
+
+db.community_members.updateOne(
+  { id: 'member-005' },
+  {
+    $set: {
+      id: 'member-005',
+      community_id: 'community-002',
+      user_id: 'user-005',
+      role: 'member',
+      joined_at: new Date(),
+      is_active: true
+    }
+  },
+  { upsert: true }
+);
+
+db.community_members.updateOne(
+  { id: 'member-006' },
+  {
+    $set: {
+      id: 'member-006',
+      community_id: 'community-003',
+      user_id: 'user-005',
+      role: 'owner',
+      joined_at: new Date(),
+      is_active: true
+    }
+  },
+  { upsert: true }
+);
+
+// 5. Create some community events (with upsert)
+db.community_events.updateOne(
+  { id: 'event-001' },
+  {
+    $set: {
+      id: 'event-001',
+      community_id: 'community-001',
+      title: 'Ganesh Chaturthi Celebration',
+      description: 'Annual celebration of Lord Ganesha with prayers, music, and prasadam distribution.',
+      start_date: new Date('2024-09-07T10:00:00Z'),
+      end_date: new Date('2024-09-07T18:00:00Z'),
+      location: 'Temple Main Hall',
+      event_type: 'festival',
+      max_attendees: 200,
+      current_attendees: 0,
+      status: 'upcoming',
+      created_by: 'user-002',
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  },
+  { upsert: true }
+);
+
+db.community_events.updateOne(
+  { id: 'event-002' },
+  {
+    $set: {
+      id: 'event-002',
+      community_id: 'community-002',
+      title: 'Youth Cultural Night',
+      description: 'An evening of traditional dances, music performances, and cultural showcases.',
+      start_date: new Date('2024-09-15T18:00:00Z'),
+      end_date: new Date('2024-09-15T22:00:00Z'),
+      location: 'Temple Community Center',
+      event_type: 'cultural',
+      max_attendees: 100,
+      current_attendees: 0,
+      status: 'upcoming',
+      created_by: 'user-004',
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  },
+  { upsert: true }
+);
+
+print('🎉 Demo data created/updated successfully!');
+print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+print('📊 Summary:');
+print('✅ Users created/updated: 5');
+print('✅ Roles assigned: 5');
+print('✅ Communities created/updated: 3');
+print('✅ Community members added: 5');
+print('✅ Events created/updated: 2');
+print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+print('');
+print('🔐 Test Users:');
+print('Email: admin@temple.com, Password: password123, Role: super_admin');
+print('Email: manager@temple.com, Password: password123, Role: temple_manager');
+print('Email: finance@temple.com, Password: password123, Role: finance_manager');
+print('Email: volunteer@temple.com, Password: password123, Role: volunteer');
+print('Email: devotee@temple.com, Password: password123, Role: user');
+print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+// Verify data exists
+print('');
+print('🔍 Verification:');
+print('Users count:', db.users.countDocuments());
+print('Communities count:', db.communities.countDocuments());
+print('Roles count:', db.user_roles.countDocuments());
+print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');

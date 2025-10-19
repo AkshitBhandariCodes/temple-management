@@ -1,0 +1,9 @@
+export { default as CommunicationsManagement } from './CommunicationsManagement';
+export { default as DashboardTab } from './DashboardTab';
+export { default as BroadcastsTab } from './BroadcastsTab';
+export { default as BrochuresTab } from './BrochuresTab';
+export { default as AnnouncementsTab } from './AnnouncementsTab';
+export { default as TemplatesTab } from './TemplatesTab';
+export { default as MessageHistoryTab } from './MessageHistoryTab';
+export { default as CreateBroadcastModal } from './CreateBroadcastModal';
+export { default as CreateBrochureModal } from './CreateBrochureModal';

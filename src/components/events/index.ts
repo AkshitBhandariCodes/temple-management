@@ -1,0 +1,11 @@
+export { EventsTasksManagement } from './EventsTasksManagement';
+export { EventsHeader } from './EventsHeader';
+export { EventsFilters } from './EventsFilters';
+export { CalendarView } from './views/CalendarView';
+export { ListView } from './views/ListView';
+export { KanbanView } from './views/KanbanView';
+export { CreateEventModal } from './modals/CreateEventModal';
+export { EventDetailModal } from './modals/EventDetailModal';
+export { TaskDetailModal } from './modals/TaskDetailModal';
+export * from './types';
+export { mockEvents } from './mockData';

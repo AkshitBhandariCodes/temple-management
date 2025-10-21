@@ -16,37 +16,75 @@ router.get('/:id/members', async (req, res) => {
 
     console.log('📋 Fetching members for community:', communityId);
 
-    // Due to RLS issues with community_members table, get members from approved applications
-    console.log('💡 Using approved applications as members due to RLS issues');
+    // Create a hybrid approach: Try multiple methods to get members
+    let members = [];
+    let memberSource = 'unknown';
 
-    let query = supabaseService.client
-      .from('community_applications')
-      .select('*')
-      .eq('community_id', communityId)
-      .eq('status', 'approved');
+    // Method 1: Try community_members table with different approaches
+    console.log('👥 Method 1: Trying community_members table...');
 
-    const { data: approvedApplications, error } = await query.order('reviewed_at', { ascending: false });
+    try {
+      // Try with minimal select to avoid column issues
+      const { data: basicMembers, error: basicError } = await supabaseService.client
+        .from('community_members')
+        .select('id, community_id, user_id')
+        .eq('community_id', communityId)
+        .limit(1);
 
-    if (error) {
-      console.error('❌ Supabase approved applications query error:', error);
-      throw error;
+      if (!basicError && basicMembers) {
+        console.log('✅ Basic community_members access successful');
+
+        // Now try full select
+        const { data: fullMembers, error: fullError } = await supabaseService.client
+          .from('community_members')
+          .select('*')
+          .eq('community_id', communityId);
+
+        if (!fullError && fullMembers) {
+          members = fullMembers.filter(m => m.status === 'active' || !m.status);
+          memberSource = 'community_members_table';
+          console.log('✅ Members loaded from community_members table:', members.length);
+        }
+      }
+    } catch (membersException) {
+      console.log('⚠️ community_members access failed:', membersException.message);
     }
 
-    // Convert approved applications to member format
-    let members = (approvedApplications || []).map(app => ({
-      id: app.id,
-      community_id: app.community_id,
-      user_id: app.user_id,
-      full_name: app.name,
-      email: app.email,
-      phone: app.phone,
-      role: 'member',
-      status: 'active',
-      joined_at: app.reviewed_at || app.applied_at,
-      is_lead: false,
-      skills: app.skills,
-      experience: app.experience
-    }));
+    // Method 2: If community_members failed, use approved applications
+    if (members.length === 0) {
+      console.log('💡 Method 2: Using approved applications as members');
+
+      const { data: approvedApplications, error: appsError } = await supabaseService.client
+        .from('community_applications')
+        .select('*')
+        .eq('community_id', communityId)
+        .eq('status', 'approved')
+        .order('reviewed_at', { ascending: false });
+
+      if (appsError) {
+        console.error('❌ Approved applications query error:', appsError);
+        throw appsError;
+      }
+
+      // Convert approved applications to member format
+      members = (approvedApplications || []).map(app => ({
+        id: app.id,
+        community_id: app.community_id,
+        user_id: app.user_id,
+        full_name: app.name,
+        email: app.email,
+        phone: app.phone,
+        role: 'member',
+        status: 'active',
+        joined_at: app.reviewed_at || app.applied_at,
+        is_lead: false,
+        skills: app.skills,
+        experience: app.experience
+      }));
+
+      memberSource = 'approved_applications';
+      console.log('✅ Members loaded from approved applications:', members.length);
+    }
 
     // Filter by search if provided
     if (search) {
@@ -57,12 +95,13 @@ router.get('/:id/members', async (req, res) => {
       );
     }
 
-    console.log('✅ Members fetched from approved applications:', members.length);
+    console.log('✅ Final members count:', members.length, 'from', memberSource);
 
     res.json({
       success: true,
       data: members,
-      total: members.length
+      total: members.length,
+      source: memberSource // For debugging
     });
   } catch (error) {
     console.error('❌ Error fetching members:', error);
@@ -412,19 +451,35 @@ router.put('/:id/applications/:applicationId/approve', async (req, res) => {
       });
     }
 
-    // Try to add user to community_members
+    // ONLY APPROVED APPLICATIONS: Add user to community_members table
+    console.log('👥 APPROVED APPLICATION: Adding to community_members table...');
+    console.log('📝 Application data:', {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      status: data.status,
+      community_id: communityId
+    });
+
     try {
-      console.log('👥 Adding user to community members...');
+      // Method 1: Try direct insertion with all available fields
+      console.log('🔄 Method 1: Direct insertion with full data...');
 
       const memberData = {
         community_id: communityId,
-        user_id: data.user_id, // Can be null
+        user_id: data.user_id || null,
         email: data.email,
         full_name: data.name,
+        phone: data.phone || null,
         role: 'member',
         status: 'active',
-        joined_at: new Date().toISOString()
+        joined_at: new Date().toISOString(),
+        is_lead: false,
+        skills: data.skills || [],
+        experience: data.experience || null
       };
+
+      console.log('📤 Inserting member data:', memberData);
 
       const { data: memberResult, error: memberError } = await supabaseService.client
         .from('community_members')
@@ -433,14 +488,87 @@ router.put('/:id/applications/:applicationId/approve', async (req, res) => {
         .single();
 
       if (memberError) {
-        console.log('⚠️ Could not add to community_members:', memberError.message);
-        // Don't fail the approval, just log the issue
+        console.error('❌ Direct insertion failed:', memberError);
+
+        // Method 2: Try with minimal required fields only
+        console.log('🔄 Method 2: Minimal fields insertion...');
+        try {
+          const minimalData = {
+            community_id: communityId,
+            user_id: data.user_id || null
+          };
+
+          const { data: minimalResult, error: minimalError } = await supabaseService.client
+            .from('community_members')
+            .insert(minimalData)
+            .select('*')
+            .single();
+
+          if (minimalError) {
+            console.error('❌ Minimal insertion also failed:', minimalError);
+            console.log('💡 Will use approved applications as members (fallback system)');
+          } else {
+            console.log('✅ Minimal insertion successful, updating with full data...');
+
+            // Try to update with additional fields
+            const updateData = {
+              email: data.email,
+              full_name: data.name,
+              phone: data.phone,
+              role: 'member',
+              status: 'active',
+              joined_at: new Date().toISOString(),
+              skills: data.skills,
+              experience: data.experience
+            };
+
+            await supabaseService.client
+              .from('community_members')
+              .update(updateData)
+              .eq('id', minimalResult.id);
+
+            console.log('✅ Member data updated successfully');
+          }
+        } catch (minimalException) {
+          console.error('❌ Minimal insertion exception:', minimalException);
+        }
       } else {
-        console.log('✅ User added to community members:', memberResult.id);
+        console.log('✅ APPROVED APPLICATION SUCCESSFULLY ADDED TO COMMUNITY_MEMBERS!');
+        console.log('📋 New member ID:', memberResult.id);
+        console.log('👤 Member details:', {
+          name: memberResult.full_name || memberResult.name,
+          email: memberResult.email,
+          role: memberResult.role,
+          status: memberResult.status
+        });
       }
+
+      // Update community member count regardless
+      try {
+        const { data: community } = await supabaseService.client
+          .from('communities')
+          .select('member_count')
+          .eq('id', communityId)
+          .single();
+
+        const newMemberCount = (community?.member_count || 0) + 1;
+
+        await supabaseService.client
+          .from('communities')
+          .update({
+            member_count: newMemberCount,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', communityId);
+
+        console.log('✅ Community member count updated to:', newMemberCount);
+      } catch (countError) {
+        console.error('❌ Failed to update member count:', countError);
+      }
+
     } catch (memberException) {
-      console.log('⚠️ Member addition failed:', memberException.message);
-      // Continue without failing the approval
+      console.error('❌ Exception in member addition process:', memberException);
+      console.log('💡 System will continue using approved applications as members');
     }
 
     console.log('✅ Application approved successfully via communityFeatures:', applicationId);
@@ -478,7 +606,65 @@ router.put('/:id/applications/:applicationId/reject', async (req, res) => {
       });
     }
 
-    // Update application status in Supabase
+    // Get application data first
+    const { data: applicationData, error: fetchError } = await supabaseService.client
+      .from('community_applications')
+      .select('*')
+      .eq('id', applicationId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    if (!applicationData) {
+      return res.status(404).json({
+        success: false,
+        message: 'Application not found'
+      });
+    }
+
+    // If application was previously approved, remove from community_members
+    if (applicationData.status === 'approved') {
+      try {
+        console.log('🗑️ Removing user from community_members (was previously approved)...');
+
+        const { data: deletedMember, error: deleteError } = await supabaseService.client
+          .from('community_members')
+          .delete()
+          .eq('community_id', applicationData.community_id)
+          .eq('email', applicationData.email)
+          .select('*')
+          .maybeSingle();
+
+        if (deleteError) {
+          console.error('❌ Failed to remove from community_members:', deleteError);
+        } else if (deletedMember) {
+          console.log('✅ User removed from community_members:', deletedMember.id);
+
+          // Update community member count
+          const { data: community } = await supabaseService.client
+            .from('communities')
+            .select('member_count')
+            .eq('id', applicationData.community_id)
+            .single();
+
+          const newMemberCount = Math.max(0, (community?.member_count || 1) - 1);
+
+          await supabaseService.client
+            .from('communities')
+            .update({
+              member_count: newMemberCount,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', applicationData.community_id);
+
+          console.log('✅ Community member count updated to:', newMemberCount);
+        }
+      } catch (memberException) {
+        console.error('❌ Exception removing member:', memberException);
+      }
+    }
+
+    // Update application status to rejected
     const { data, error } = await supabaseService.client
       .from('community_applications')
       .update({
@@ -493,13 +679,6 @@ router.put('/:id/applications/:applicationId/reject', async (req, res) => {
       .single();
 
     if (error) throw error;
-
-    if (!data) {
-      return res.status(404).json({
-        success: false,
-        message: 'Application not found'
-      });
-    }
 
     console.log('✅ Application rejected successfully via communityFeatures:', applicationId);
 
@@ -622,19 +801,35 @@ router.put('/:id/tasks/:taskId', async (req, res) => {
   try {
     const { taskId } = req.params;
     const updates = req.body;
-    updates.updated_at = new Date();
+    updates.updated_at = new Date().toISOString();
+
+    console.log('📝 Updating task:', taskId);
+    console.log('📝 Updates:', updates);
 
     if (updates.status === 'completed' && !updates.completed_at) {
-      updates.completed_at = new Date();
+      updates.completed_at = new Date().toISOString();
     }
 
-    const task = await CommunityTask.findByIdAndUpdate(
-      taskId,
-      updates,
-      { new: true }
-    )
-      .populate('assigned_to', 'full_name email avatar_url')
-      .populate('created_by', 'full_name avatar_url');
+    const { data: task, error } = await supabaseService.client
+      .from('community_tasks')
+      .update(updates)
+      .eq('id', taskId)
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error('❌ Supabase task update error:', error);
+      throw error;
+    }
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found'
+      });
+    }
+
+    console.log('✅ Task updated successfully:', task.id);
 
     res.json({
       success: true,
@@ -654,10 +849,33 @@ router.put('/:id/tasks/:taskId', async (req, res) => {
 router.delete('/:id/tasks/:taskId', async (req, res) => {
   try {
     const { taskId } = req.params;
-    await CommunityTask.findByIdAndDelete(taskId);
+
+    console.log('🗑️ Deleting task:', taskId);
+
+    const { data: task, error } = await supabaseService.client
+      .from('community_tasks')
+      .delete()
+      .eq('id', taskId)
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error('❌ Supabase task delete error:', error);
+      throw error;
+    }
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found'
+      });
+    }
+
+    console.log('✅ Task deleted successfully:', task.id);
 
     res.json({
       success: true,
+      data: task,
       message: 'Task deleted successfully'
     });
   } catch (error) {

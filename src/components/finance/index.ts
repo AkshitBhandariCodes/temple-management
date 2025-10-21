@@ -6,4 +6,3 @@ export { BudgetsTab } from './BudgetsTab';
 export { ReportsTab } from './ReportsTab';
 export { ReconciliationTab } from './ReconciliationTab';
 export * from './types';
-export * from './mockData';

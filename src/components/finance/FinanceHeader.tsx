@@ -11,111 +11,114 @@ export const FinanceHeader = () => {
 
   useEffect(() => {
     const fetchStats = async () => {
-      // Today's Donations
       const today = new Date();
-      const todayStr = today.toISOString().slice(0, 10);
+      const todayStr = today.toISOString().split("T")[0];
 
       const { data: todaysDonations } = await supabase
         .from("donations")
         .select("net_amount")
-        .eq("received_at", todayStr);
+        .gte("received_date", `${todayStr}T00:00:00`)
+        .lte("received_date", `${todayStr}T23:59:59`);
+
       setTodaysTotal(
         (todaysDonations || []).reduce((sum, d) => sum + (d.net_amount || 0), 0)
       );
-      // This Month's Total
-      const monthStart = `${today.getFullYear()}-${String(today.getMonth() + 1)
-        .padStart(2, "0")}-01`;
-      const monthEnd = `${today.getFullYear()}-${String(
-        today.getMonth() + 1
-      ).padStart(2, "0")}-31`;
+
+      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split("T")[0];
+      const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split("T")[0];
 
       const { data: monthsDonations } = await supabase
         .from("donations")
         .select("net_amount")
-        .gte("received_at", monthStart)
-        .lte("received_at", monthEnd);
+        .gte("received_date", `${monthStart}T00:00:00`)
+        .lte("received_date", `${monthEnd}T23:59:59`);
+
       setMonthsTotal(
         (monthsDonations || []).reduce((sum, d) => sum + (d.net_amount || 0), 0)
       );
 
-      // Pending Reconciliation (dummy = count pending donations)
       const { data: pending } = await supabase
         .from("donations")
         .select("id", { count: "exact" })
         .eq("reconciled", false);
+
       setPendingReconciliation(pending?.length ?? 0);
 
-      // Pending Budget Requests
       const { data: budgetRequests } = await supabase
         .from("budgets")
         .select("id", { count: "exact" })
         .eq("status", "pending");
+
       setPendingBudgets(budgetRequests?.length ?? 0);
     };
 
     fetchStats();
+
+    const donationsSub = supabase
+      .channel("donations-header")
+      .on("postgres_changes", { event: "*", schema: "public", table: "donations" }, fetchStats)
+      .subscribe();
+
+    const budgetsSub = supabase
+      .channel("budgets-header")
+      .on("postgres_changes", { event: "*", schema: "public", table: "budgets" }, fetchStats)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(donationsSub);
+      supabase.removeChannel(budgetsSub);
+    };
   }, []);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">Finance Management</h1>
-      </div>
-      {/* Quick Stats Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4 flex items-center space-x-3">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <IndianRupee className="h-5 w-5 text-green-600" />
-            </div>
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Today's Donations</p>
-              <p className="text-xl font-semibold text-gray-900">
-                ₹{todaysTotal.toLocaleString()}
-              </p>
+              <p className="text-sm text-gray-500">Today's Donations</p>
+              <p className="text-2xl font-bold mt-1">₹{todaysTotal.toLocaleString()}</p>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center space-x-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <TrendingUp className="h-5 w-5 text-blue-600" />
-            </div>
+            <IndianRupee className="h-8 w-8 text-blue-500" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">This Month's Total</p>
-              <p className="text-xl font-semibold text-gray-900">
-                ₹{monthsTotal.toLocaleString()}
-              </p>
+              <p className="text-sm text-gray-500">This Month's Total</p>
+              <p className="text-2xl font-bold mt-1">₹{monthsTotal.toLocaleString()}</p>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center space-x-3">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <Clock className="h-5 w-5 text-orange-600" />
-            </div>
+            <TrendingUp className="h-8 w-8 text-green-500" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Pending Reconciliation</p>
-              <p className="text-xl font-semibold text-gray-900">
-                {pendingReconciliation}
-              </p>
+              <p className="text-sm text-gray-500">Pending Reconciliation</p>
+              <p className="text-2xl font-bold mt-1">{pendingReconciliation}</p>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center space-x-3">
-            <div className="p-2 bg-gray-100 rounded-lg">
-              <FileText className="h-5 w-5 text-gray-600" />
-            </div>
+            <Clock className="h-8 w-8 text-yellow-500" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Budget Requests</p>
-              <p className="text-xl font-semibold text-gray-900">
-                {pendingBudgets}
-              </p>
+              <p className="text-sm text-gray-500">Budget Requests</p>
+              <p className="text-2xl font-bold mt-1">{pendingBudgets}</p>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+            <FileText className="h-8 w-8 text-purple-500" />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

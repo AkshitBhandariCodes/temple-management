@@ -1,25 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { 
-  Calendar as CalendarIcon, 
-  Clock, 
-  MapPin, 
-  Users, 
+import {
+  Calendar as CalendarIcon,
+  Clock,
+  MapPin,
   Plus,
   Edit,
-  Copy,
   Trash2,
   UserPlus,
   Filter,
@@ -27,9 +23,11 @@ import {
   List,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from "lucide-react";
 import { format } from "date-fns";
+import { supabase } from "../../utils/supabaseClient";
 
 export const ShiftsTab = () => {
   const [viewMode, setViewMode] = useState<"calendar" | "list">("list");
@@ -37,98 +35,57 @@ export const ShiftsTab = () => {
   const [locationFilter, setLocationFilter] = useState("all");
   const [selectedShift, setSelectedShift] = useState<any>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [shifts, setShifts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock shifts data
-  const shifts = [
-    {
-      id: 1,
-      title: "Morning Aarti Assistant",
-      date: "2024-01-16",
-      startTime: "06:00",
-      endTime: "08:00",
-      duration: "2 hours",
-      location: "Main Temple",
-      requiredVolunteers: 3,
-      assignedVolunteers: [
-        { id: 1, name: "Priya Sharma", avatar: "/placeholder.svg", status: "confirmed" },
-        { id: 2, name: "Raj Patel", avatar: "/placeholder.svg", status: "confirmed" },
-        { id: 3, name: "Meera Singh", avatar: "/placeholder.svg", status: "pending" }
-      ],
-      waitlist: [],
-      status: "filled",
-      requiredSkills: ["Temple Services", "Sanskrit"],
-      experienceLevel: "Intermediate",
-      eventAssociation: "Daily Worship",
-      coordinator: "Pandit Sharma",
-      specialInstructions: "Please arrive 15 minutes early for briefing"
-    },
-    {
-      id: 2,
-      title: "Kitchen Prasadam Preparation",
-      date: "2024-01-16",
-      startTime: "10:00",
-      endTime: "14:00",
-      duration: "4 hours",
-      location: "Temple Kitchen",
-      requiredVolunteers: 5,
-      assignedVolunteers: [
-        { id: 4, name: "Arjun Kumar", avatar: "/placeholder.svg", status: "confirmed" },
-        { id: 5, name: "Lakshmi Devi", avatar: "/placeholder.svg", status: "confirmed" }
-      ],
-      waitlist: [
-        { id: 6, name: "Ravi Shankar", avatar: "/placeholder.svg" }
-      ],
-      status: "partially-filled",
-      requiredSkills: ["Kitchen Management", "Food Safety"],
-      experienceLevel: "Beginner",
-      eventAssociation: "Daily Prasadam",
-      coordinator: "Chef Ramesh",
-      specialInstructions: "Food safety certification required"
-    },
-    {
-      id: 3,
-      title: "Evening Event Setup",
-      date: "2024-01-17",
-      startTime: "16:00",
-      endTime: "20:00",
-      duration: "4 hours",
-      location: "Community Hall",
-      requiredVolunteers: 8,
-      assignedVolunteers: [],
-      waitlist: [],
-      status: "open",
-      requiredSkills: ["Event Management", "Setup"],
-      experienceLevel: "Beginner",
-      eventAssociation: "Bhajan Evening",
-      coordinator: "Sita Devi",
-      specialInstructions: "Heavy lifting may be required"
-    },
-    {
-      id: 4,
-      title: "Youth Program Coordination",
-      date: "2024-01-18",
-      startTime: "15:00",
-      endTime: "18:00",
-      duration: "3 hours",
-      location: "Youth Center",
-      requiredVolunteers: 2,
-      assignedVolunteers: [
-        { id: 7, name: "Anita Gupta", avatar: "/placeholder.svg", status: "confirmed" },
-        { id: 8, name: "Vikram Singh", avatar: "/placeholder.svg", status: "confirmed" }
-      ],
-      waitlist: [],
-      status: "filled",
-      requiredSkills: ["Youth Programs", "Teaching"],
-      experienceLevel: "Advanced",
-      eventAssociation: "Weekly Youth Class",
-      coordinator: "Teacher Priya",
-      specialInstructions: "Experience with children required"
+  async function fetchShifts() {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { data, error: fetchError } = await supabase
+        .from("shifts")
+        .select("*")
+        .order("shift_date", { ascending: true });
+
+      if (fetchError) {
+        console.error("Error fetching shifts:", fetchError);
+        setError(fetchError.message);
+      } else {
+        setShifts(data || []);
+      }
+    } catch (err: any) {
+      console.error("Network error:", err);
+      setError("Failed to fetch shifts");
+    } finally {
+      setLoading(false);
     }
-  ];
+  }
+
+  useEffect(() => {
+    fetchShifts();
+
+    const channel = supabase
+      .channel("shifts-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "shifts" },
+        () => {
+          console.log("Shifts data changed, refetching...");
+          fetchShifts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const filteredShifts = shifts.filter(shift => {
     const matchesStatus = statusFilter === "all" || shift.status === statusFilter;
-    const matchesLocation = locationFilter === "all" || shift.location.toLowerCase().includes(locationFilter.toLowerCase());
+    const matchesLocation = locationFilter === "all" || shift.location?.toLowerCase().includes(locationFilter.toLowerCase());
     return matchesStatus && matchesLocation;
   });
 
@@ -160,9 +117,27 @@ export const ShiftsTab = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <XCircle className="w-12 h-12 text-red-500 mb-4" />
+        <p className="text-lg font-medium text-red-600">Connection Error</p>
+        <p className="text-sm text-muted-foreground mb-4">{error}</p>
+        <Button onClick={fetchShifts}>Retry</Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Filter Panel */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
@@ -226,14 +201,13 @@ export const ShiftsTab = () => {
                 <DialogHeader>
                   <DialogTitle>Create New Shift</DialogTitle>
                 </DialogHeader>
-                <CreateShiftModal onClose={() => setIsCreateModalOpen(false)} />
+                <CreateShiftModal onClose={() => setIsCreateModalOpen(false)} onRefresh={fetchShifts} />
               </DialogContent>
             </Dialog>
           </div>
         </CardContent>
       </Card>
 
-      {/* Shifts Display */}
       {viewMode === "list" ? (
         <Card>
           <CardHeader>
@@ -245,8 +219,7 @@ export const ShiftsTab = () => {
                 <TableRow>
                   <TableHead>Shift Details</TableHead>
                   <TableHead>Requirements</TableHead>
-                  <TableHead>Assignments</TableHead>
-                  <TableHead>Event Association</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -262,11 +235,11 @@ export const ShiftsTab = () => {
                         <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                           <div className="flex items-center space-x-1">
                             <CalendarIcon className="w-3 h-3" />
-                            <span>{shift.date}</span>
+                            <span>{shift.shift_date ? format(new Date(shift.shift_date), "MMM dd, yyyy") : 'N/A'}</span>
                           </div>
                           <div className="flex items-center space-x-1">
                             <Clock className="w-3 h-3" />
-                            <span>{shift.startTime} - {shift.endTime}</span>
+                            <span>{shift.start_time} - {shift.end_time}</span>
                           </div>
                           <div className="flex items-center space-x-1">
                             <MapPin className="w-3 h-3" />
@@ -278,80 +251,29 @@ export const ShiftsTab = () => {
                     <TableCell>
                       <div className="space-y-2">
                         <div className="text-sm">
-                          <span className="font-medium">{shift.requiredVolunteers}</span> volunteers needed
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {shift.requiredSkills.map((skill, index) => (
-                            <Badge key={index} variant="outline" className="text-xs">
-                              {skill}
-                            </Badge>
-                          ))}
+                          <span className="font-medium">{shift.required_volunteers || 0}</span> volunteers needed
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {shift.experienceLevel} level
+                          {shift.assigned_volunteers?.length || 0} assigned
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-2">
-                        <div className="flex -space-x-2">
-                          {shift.assignedVolunteers.map((volunteer, index) => (
-                            <Avatar key={index} className="w-6 h-6 border-2 border-white">
-                              <AvatarImage src={volunteer.avatar} />
-                              <AvatarFallback className="text-xs">
-                                {volunteer.name.split(' ').map(n => n[0]).join('')}
-                              </AvatarFallback>
-                            </Avatar>
-                          ))}
-                          {shift.assignedVolunteers.length === 0 && (
-                            <div className="w-6 h-6 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center">
-                              <Users className="w-3 h-3 text-gray-400" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-sm">
-                          <span className="font-medium">{shift.assignedVolunteers.length}</span>/{shift.requiredVolunteers} assigned
-                        </div>
-                        {shift.waitlist.length > 0 && (
-                          <div className="text-xs text-muted-foreground">
-                            {shift.waitlist.length} on waitlist
-                          </div>
-                        )}
-                        {getStatusBadge(shift.status)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium">{shift.eventAssociation}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Coordinator: {shift.coordinator}
-                        </p>
-                      </div>
+                      {getStatusBadge(shift.status)}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2">
-                        <Button variant="outline" size="sm">
-                          <UserPlus className="w-4 h-4" />
-                        </Button>
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => setSelectedShift(shift)}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-2xl">
-                            <DialogHeader>
-                              <DialogTitle>Edit Shift</DialogTitle>
-                            </DialogHeader>
-                            {selectedShift && <EditShiftModal shift={selectedShift} />}
-                          </DialogContent>
-                        </Dialog>
-                        <Button variant="outline" size="sm">
-                          <Copy className="w-4 h-4" />
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={async () => {
+                            if (confirm('Delete this shift?')) {
+                              await supabase.from('shifts').delete().eq('id', shift.id);
+                              fetchShifts();
+                            }
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -359,6 +281,11 @@ export const ShiftsTab = () => {
                 ))}
               </TableBody>
             </Table>
+            {filteredShifts.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                No shifts found matching your filters.
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -367,13 +294,10 @@ export const ShiftsTab = () => {
             <CardTitle>Calendar View</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-7 gap-4">
-              {/* Calendar implementation would go here */}
-              <div className="col-span-7 text-center py-12 text-muted-foreground">
-                <CalendarIcon className="w-12 h-12 mx-auto mb-4 text-temple-saffron/50" />
-                <p className="text-lg mb-2">Calendar View</p>
-                <p>Interactive calendar with drag-and-drop shift scheduling coming soon.</p>
-              </div>
+            <div className="text-center py-12 text-muted-foreground">
+              <CalendarIcon className="w-12 h-12 mx-auto mb-4 text-temple-saffron/50" />
+              <p className="text-lg mb-2">Calendar View</p>
+              <p>Interactive calendar coming soon.</p>
             </div>
           </CardContent>
         </Card>
@@ -382,189 +306,125 @@ export const ShiftsTab = () => {
   );
 };
 
-// Create Shift Modal Component
-const CreateShiftModal = ({ onClose }: { onClose: () => void }) => {
+const CreateShiftModal = ({ onClose, onRefresh }: { onClose: () => void; onRefresh: () => void }) => {
   const [selectedDate, setSelectedDate] = useState<Date>();
+  const [title, setTitle] = useState("");
+  const [location, setLocation] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [requiredVolunteers, setRequiredVolunteers] = useState(1);
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  return (
-    <Tabs defaultValue="basic" className="w-full">
-      <TabsList className="grid w-full grid-cols-3">
-        <TabsTrigger value="basic">Basic Information</TabsTrigger>
-        <TabsTrigger value="assignment">Assignment</TabsTrigger>
-        <TabsTrigger value="notifications">Notifications</TabsTrigger>
-      </TabsList>
+  const handleCreate = async () => {
+    if (!title || !selectedDate || !startTime || !endTime || !location) {
+      alert("Please fill in all required fields");
+      return;
+    }
 
-      <TabsContent value="basic" className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="title">Shift Title</Label>
-            <Input id="title" placeholder="Enter shift title" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="location">Location</Label>
-            <Select>
-              <SelectTrigger>
-                <SelectValue placeholder="Select location" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="main-temple">Main Temple</SelectItem>
-                <SelectItem value="kitchen">Temple Kitchen</SelectItem>
-                <SelectItem value="community-hall">Community Hall</SelectItem>
-                <SelectItem value="youth-center">Youth Center</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+    setSaving(true);
+    setError(null);
 
-        <div className="grid grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <Label>Date</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="w-full justify-start text-left font-normal">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={setSelectedDate}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="start-time">Start Time</Label>
-            <Input id="start-time" type="time" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="end-time">End Time</Label>
-            <Input id="end-time" type="time" />
-          </div>
-        </div>
+    try {
+      const { error: insertError } = await supabase.from("shifts").insert({
+        title,
+        shift_date: format(selectedDate, "yyyy-MM-dd"),
+        start_time: startTime,
+        end_time: endTime,
+        location,
+        required_volunteers: requiredVolunteers,
+        description,
+        status: "open",
+        assigned_volunteers: []
+      });
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="volunteers-needed">Volunteers Needed</Label>
-            <Input id="volunteers-needed" type="number" placeholder="Number of volunteers" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="experience-level">Experience Level</Label>
-            <Select>
-              <SelectTrigger>
-                <SelectValue placeholder="Select level" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="beginner">Beginner</SelectItem>
-                <SelectItem value="intermediate">Intermediate</SelectItem>
-                <SelectItem value="advanced">Advanced</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+      if (insertError) {
+        console.error("Error creating shift:", insertError);
+        setError(insertError.message);
+        alert(`Failed: ${insertError.message}`);
+      } else {
+        onRefresh();
+        onClose();
+      }
+    } catch (err: any) {
+      console.error("Network error:", err);
+      setError("Network connection failed");
+      alert("Failed to create shift: Network error");
+    } finally {
+      setSaving(false);
+    }
+  };
 
-        <div className="space-y-2">
-          <Label htmlFor="description">Description</Label>
-          <Textarea id="description" placeholder="Shift description and requirements" />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="special-instructions">Special Instructions</Label>
-          <Textarea id="special-instructions" placeholder="Any special instructions for volunteers" />
-        </div>
-
-        <div className="flex justify-end space-x-2">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button className="bg-temple-saffron hover:bg-temple-saffron/90">Create Shift</Button>
-        </div>
-      </TabsContent>
-
-      <TabsContent value="assignment" className="space-y-4">
-        <div className="text-center py-8 text-muted-foreground">
-          <UserPlus className="w-12 h-12 mx-auto mb-4 text-temple-saffron/50" />
-          <p>Volunteer assignment will be available after creating the shift.</p>
-        </div>
-      </TabsContent>
-
-      <TabsContent value="notifications" className="space-y-4">
-        <div className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <input type="checkbox" id="notify-assigned" className="rounded" />
-            <Label htmlFor="notify-assigned">Notify assigned volunteers</Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <input type="checkbox" id="send-reminders" className="rounded" />
-            <Label htmlFor="send-reminders">Send shift reminders</Label>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="custom-message">Custom Message (Optional)</Label>
-            <Textarea id="custom-message" placeholder="Additional message for volunteers" />
-          </div>
-        </div>
-      </TabsContent>
-    </Tabs>
-  );
-};
-
-// Edit Shift Modal Component
-const EditShiftModal = ({ shift }: { shift: any }) => {
   return (
     <div className="space-y-4">
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="edit-title">Shift Title</Label>
-          <Input id="edit-title" defaultValue={shift.title} />
+          <Label>Shift Title *</Label>
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Morning Prayer Service" />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="edit-location">Location</Label>
-          <Input id="edit-location" defaultValue={shift.location} />
+          <Label>Location *</Label>
+          <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Main Temple" />
         </div>
       </div>
-      
+
       <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="edit-date">Date</Label>
-          <Input id="edit-date" type="date" defaultValue={shift.date} />
+          <Label>Date *</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-full justify-start text-left font-normal">
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={setSelectedDate}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="edit-start">Start Time</Label>
-          <Input id="edit-start" type="time" defaultValue={shift.startTime} />
+          <Label>Start Time *</Label>
+          <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="edit-end">End Time</Label>
-          <Input id="edit-end" type="time" defaultValue={shift.endTime} />
+          <Label>End Time *</Label>
+          <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
         </div>
       </div>
 
       <div className="space-y-2">
-        <Label>Assigned Volunteers</Label>
-        <div className="space-y-2">
-          {shift.assignedVolunteers.map((volunteer: any, index: number) => (
-            <div key={index} className="flex items-center justify-between p-2 border rounded">
-              <div className="flex items-center space-x-2">
-                <Avatar className="w-8 h-8">
-                  <AvatarImage src={volunteer.avatar} />
-                  <AvatarFallback>{volunteer.name.split(' ').map((n: string) => n[0]).join('')}</AvatarFallback>
-                </Avatar>
-                <span>{volunteer.name}</span>
-                <Badge variant={volunteer.status === 'confirmed' ? 'default' : 'secondary'}>
-                  {volunteer.status}
-                </Badge>
-              </div>
-              <Button variant="outline" size="sm">
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </div>
-          ))}
-        </div>
+        <Label>Volunteers Needed</Label>
+        <Input
+          type="number"
+          value={requiredVolunteers}
+          onChange={(e) => setRequiredVolunteers(parseInt(e.target.value) || 1)}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Description</Label>
+        <Textarea value={description} onChange={(e) => setDescription(e.target.value)} />
       </div>
 
       <div className="flex justify-end space-x-2">
-        <Button variant="outline">Cancel</Button>
-        <Button className="bg-temple-saffron hover:bg-temple-saffron/90">Save Changes</Button>
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
+        <Button onClick={handleCreate} disabled={saving}>
+          {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+          Create Shift
+        </Button>
       </div>
     </div>
   );

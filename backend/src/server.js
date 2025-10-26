@@ -17,10 +17,12 @@ const debugRoutes = require('./routes/debug');
 const donationRoutes = require('./routes/donations');
 const expenseRoutes = require('./routes/expenses');
 const eventRoutes = require('./routes/events');
+const taskRoutes = require('./routes/tasks');
 const volunteerRoutes = require('./routes/volunteers');
 const broadcastRoutes = require('./routes/broadcasts');
 const templateRoutes = require('./routes/templates');
 const pujaRoutes = require('./routes/pujas');
+const budgetRequestRoutes = require('./routes/budgetRequests');
 
 // Import Supabase-backed models
 require('./models/User');
@@ -76,12 +78,14 @@ app.use('/api', frontendCompatibleRoutes); // Frontend-compatible routes
 app.use('/api', reportsRoutes); // Reports and calendar routes
 app.use('/api', debugRoutes); // Debug routes for troubleshooting
 app.use('/api', eventRoutes); // Events management routes
+app.use('/api', taskRoutes); // Tasks management routes
 app.use('/api/donations', donationRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/volunteers', volunteerRoutes);
 app.use('/api/broadcasts', broadcastRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/pujas', pujaRoutes);
+app.use('/api/budget-requests', budgetRequestRoutes);
 
 // Temporary schema check endpoint (remove in production)
 // app.use('/api/debug', require('../check-schema-endpoint'));

@@ -16,75 +16,42 @@ router.get('/:id/members', async (req, res) => {
 
     console.log('📋 Fetching members for community:', communityId);
 
-    // Create a hybrid approach: Try multiple methods to get members
+    // Always use approved applications as members since they have complete user data
     let members = [];
-    let memberSource = 'unknown';
+    let memberSource = 'approved_applications';
 
-    // Method 1: Try community_members table with different approaches
-    console.log('👥 Method 1: Trying community_members table...');
+    console.log('👥 Using approved applications as members (primary method)');
 
-    try {
-      // Try with minimal select to avoid column issues
-      const { data: basicMembers, error: basicError } = await supabaseService.client
-        .from('community_members')
-        .select('id, community_id, user_id')
-        .eq('community_id', communityId)
-        .limit(1);
+    const { data: approvedApplications, error: appsError } = await supabaseService.client
+      .from('community_applications')
+      .select('*')
+      .eq('community_id', communityId)
+      .eq('status', 'approved')
+      .order('reviewed_at', { ascending: false });
 
-      if (!basicError && basicMembers) {
-        console.log('✅ Basic community_members access successful');
-
-        // Now try full select
-        const { data: fullMembers, error: fullError } = await supabaseService.client
-          .from('community_members')
-          .select('*')
-          .eq('community_id', communityId);
-
-        if (!fullError && fullMembers) {
-          members = fullMembers.filter(m => m.status === 'active' || !m.status);
-          memberSource = 'community_members_table';
-          console.log('✅ Members loaded from community_members table:', members.length);
-        }
-      }
-    } catch (membersException) {
-      console.log('⚠️ community_members access failed:', membersException.message);
+    if (appsError) {
+      console.error('❌ Approved applications query error:', appsError);
+      throw appsError;
     }
 
-    // Method 2: If community_members failed, use approved applications
-    if (members.length === 0) {
-      console.log('💡 Method 2: Using approved applications as members');
+    // Convert approved applications to member format with complete user data
+    members = (approvedApplications || []).map(app => ({
+      id: app.id,
+      community_id: app.community_id,
+      user_id: app.user_id,
+      full_name: app.name,
+      email: app.email,
+      phone: app.phone,
+      role: 'member',
+      status: 'active',
+      joined_at: app.reviewed_at || app.applied_at,
+      is_lead: false,
+      skills: app.skills || [],
+      experience: app.experience || null
+    }));
 
-      const { data: approvedApplications, error: appsError } = await supabaseService.client
-        .from('community_applications')
-        .select('*')
-        .eq('community_id', communityId)
-        .eq('status', 'approved')
-        .order('reviewed_at', { ascending: false });
-
-      if (appsError) {
-        console.error('❌ Approved applications query error:', appsError);
-        throw appsError;
-      }
-
-      // Convert approved applications to member format
-      members = (approvedApplications || []).map(app => ({
-        id: app.id,
-        community_id: app.community_id,
-        user_id: app.user_id,
-        full_name: app.name,
-        email: app.email,
-        phone: app.phone,
-        role: 'member',
-        status: 'active',
-        joined_at: app.reviewed_at || app.applied_at,
-        is_lead: false,
-        skills: app.skills,
-        experience: app.experience
-      }));
-
-      memberSource = 'approved_applications';
-      console.log('✅ Members loaded from approved applications:', members.length);
-    }
+    memberSource = 'approved_applications';
+    console.log('✅ Members loaded from approved applications:', members.length);
 
     // Filter by search if provided
     if (search) {

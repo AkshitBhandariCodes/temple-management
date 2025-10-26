@@ -2,6 +2,214 @@ const express = require('express');
 const router = express.Router();
 const supabaseService = require('../services/supabaseService');
 
+// GET all events (general endpoint)
+router.get('/events', async (req, res) => {
+  try {
+    const { status, type, community_id, start_date, end_date, limit = 50, page = 1 } = req.query;
+
+    console.log('📅 Fetching all events with filters:', { status, type, community_id, start_date, end_date, limit, page });
+
+    let query = supabaseService.client
+      .from('community_events')
+      .select('*')
+      .order('start_date', { ascending: true });
+
+    // Apply filters
+    if (status && status !== 'all') {
+      query = query.eq('status', status);
+    }
+    if (type && type !== 'all') {
+      query = query.eq('event_type', type);
+    }
+    if (community_id && community_id !== 'all') {
+      query = query.eq('community_id', community_id);
+    }
+    if (start_date) {
+      query = query.gte('start_date', start_date);
+    }
+    if (end_date) {
+      query = query.lte('start_date', end_date);
+    }
+
+    // Pagination
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    query = query.range(offset, offset + parseInt(limit) - 1);
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    // Map database fields to API format
+    const mappedData = (data || []).map(event => ({
+      ...event,
+      starts_at: event.start_date,    // Map start_date to starts_at
+      ends_at: event.end_date,        // Map end_date to ends_at
+      capacity: event.max_participants, // Map max_participants to capacity
+      registration_required: false,   // Default value
+      timezone: 'Asia/Kolkata',      // Default timezone
+      visibility: 'public',          // Default visibility
+      is_recurring: false            // Default recurring
+    }));
+
+    res.json({
+      success: true,
+      data: mappedData,
+      total: mappedData.length,
+      page: parseInt(page),
+      limit: parseInt(limit)
+    });
+
+  } catch (error) {
+    console.error('Error fetching events:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch events',
+      error: error.message
+    });
+  }
+});
+
+// POST create new event (general endpoint)
+router.post('/events', async (req, res) => {
+  try {
+    const {
+      community_id,
+      title,
+      description,
+      starts_at,
+      ends_at,
+      location,
+      timezone = 'Asia/Kolkata',
+      visibility = 'public',
+      status = 'published',
+      capacity,
+      registration_required = false,
+      registration_deadline
+    } = req.body;
+
+    console.log('📅 Creating new event:', { title, community_id, starts_at, ends_at });
+
+    // Validate required fields
+    if (!title || !starts_at || !ends_at) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: title, starts_at, ends_at'
+      });
+    }
+
+    // Validate dates
+    if (new Date(ends_at) <= new Date(starts_at)) {
+      return res.status(400).json({
+        success: false,
+        message: 'End date must be after start date'
+      });
+    }
+
+    const eventData = {
+      community_id: community_id || null,
+      title,
+      description: description || '',
+      start_date: starts_at,  // Map starts_at to start_date
+      end_date: ends_at,      // Map ends_at to end_date
+      location: location || '',
+      event_type: 'meeting',  // Default event type
+      status,
+      max_participants: capacity ? parseInt(capacity) : null,  // Map capacity to max_participants
+      current_participants: 0,
+      organizer_id: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabaseService.client
+      .from('community_events')
+      .insert(eventData)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+
+    console.log('✅ Event created:', data.id);
+
+    res.status(201).json({
+      success: true,
+      data,
+      message: 'Event created successfully'
+    });
+
+  } catch (error) {
+    console.error('Error creating event:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create event',
+      error: error.message
+    });
+  }
+});
+
+// PUT update event (general endpoint)
+router.put('/events/:id', async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const { starts_at, ends_at, capacity, ...otherFields } = req.body;
+
+    // Map API fields to database fields
+    const updateData = {
+      ...otherFields,
+      updated_at: new Date().toISOString()
+    };
+
+    // Map field names
+    if (starts_at) updateData.start_date = starts_at;
+    if (ends_at) updateData.end_date = ends_at;
+    if (capacity) updateData.max_participants = capacity;
+
+    console.log('📅 Updating event:', eventId, updateData);
+
+    // Validate dates if both are provided
+    if (updateData.start_date && updateData.end_date) {
+      if (new Date(updateData.end_date) <= new Date(updateData.start_date)) {
+        return res.status(400).json({
+          success: false,
+          message: 'End date must be after start date'
+        });
+      }
+    }
+
+    const { data, error } = await supabaseService.client
+      .from('community_events')
+      .update(updateData)
+      .eq('id', eventId)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+
+    if (!data) {
+      return res.status(404).json({
+        success: false,
+        message: 'Event not found'
+      });
+    }
+
+    console.log('✅ Event updated:', data.id);
+
+    res.json({
+      success: true,
+      data,
+      message: 'Event updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Error updating event:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update event',
+      error: error.message
+    });
+  }
+});
+
 // GET all events for a community
 router.get('/communities/:id/events', async (req, res) => {
   try {

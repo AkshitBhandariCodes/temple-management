@@ -1126,3 +1126,91 @@ export function useLoginUser() {
 		},
 	});
 }
+
+// ================================================
+// ACTIVITY TIMELINE HOOKS
+// ================================================
+
+export interface ActivityTimelineItem {
+	id: string;
+	activity_type: string;
+	title: string;
+	description?: string;
+	created_at: string;
+	user?: {
+		full_name?: string;
+	};
+	community_id?: string;
+	metadata?: {
+		amount?: number;
+		[key: string]: any;
+	};
+}
+
+export function useActivityTimeline(
+	communityId?: string,
+	params?: {
+		limit?: number;
+		page?: number;
+	}
+) {
+	return useQuery({
+		queryKey: ["activity-timeline", communityId, params],
+		staleTime: 5 * 60 * 1000, // 5 minutes
+		cacheTime: 10 * 60 * 1000, // 10 minutes
+		queryFn: async () => {
+			// For now, return mock data since we don't have a real activity timeline endpoint
+			const mockActivities: ActivityTimelineItem[] = [
+				{
+					id: "1",
+					activity_type: "donation",
+					title: "New Donation Received",
+					description: "Received donation from John Doe",
+					created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 minutes ago
+					user: { full_name: "John Doe" },
+					community_id: "main-temple",
+					metadata: { amount: 5000 },
+				},
+				{
+					id: "2",
+					activity_type: "event",
+					title: "Event Created",
+					description: "Morning Prayer Session scheduled",
+					created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
+					user: { full_name: "Admin" },
+					community_id: "main-temple",
+				},
+				{
+					id: "3",
+					activity_type: "member",
+					title: "New Member Joined",
+					description: "Jane Smith joined the community",
+					created_at: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(), // 4 hours ago
+					user: { full_name: "Jane Smith" },
+					community_id: "youth-group",
+				},
+				{
+					id: "4",
+					activity_type: "task",
+					title: "Task Completed",
+					description: "Temple cleaning task marked as complete",
+					created_at: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(), // 6 hours ago
+					user: { full_name: "Volunteer Team" },
+					community_id: "main-temple",
+				},
+				{
+					id: "5",
+					activity_type: "budget",
+					title: "Expense Approved",
+					description: "Temple maintenance expense approved",
+					created_at: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(), // 8 hours ago
+					user: { full_name: "Finance Team" },
+					community_id: "main-temple",
+					metadata: { amount: 15000 },
+				},
+			];
+
+			return mockActivities;
+		},
+	});
+}

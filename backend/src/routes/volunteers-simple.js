@@ -58,8 +58,12 @@ router.post('/', async (req, res) => {
             last_name,
             email,
             phone,
+            date_of_birth,
+            address,
+            emergency_contact,
             skills,
             interests,
+            availability,
             notes
         } = req.body;
 
@@ -87,6 +91,12 @@ router.post('/', async (req, res) => {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
         };
+
+        // TODO: Add these fields after running the database migration:
+        // date_of_birth: date_of_birth || null,
+        // address: address || {},
+        // emergency_contact: emergency_contact || {},
+        // availability: availability || {},
 
         const { data, error } = await supabaseService.client
             .from('volunteers')
@@ -860,19 +870,24 @@ router.put('/applications/:id/approve', async (req, res) => {
 
         const volunteerData = {
             community_id: application.community_id,
-            user_id: application.user_id,
             first_name: application.first_name,
             last_name: application.last_name,
             email: application.email,
             phone: application.phone,
-            skills: application.skills,
-            interests: application.interests,
+            skills: application.skills || [],
+            interests: application.interests || [],
             status: 'active',
             total_hours_volunteered: 0,
-            notes: `Approved from application: ${application.motivation}`,
+            notes: `Approved from application: ${application.motivation || application.experience || 'Application approved'}`,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
         };
+
+        // TODO: Add these fields after running database migration to add columns:
+        // date_of_birth: application.date_of_birth || null,
+        // address: application.address || {},
+        // emergency_contact: application.emergency_contact || {},
+        // availability: application.availability || {},
 
         const { data: volunteer, error: volunteerError } = await supabaseService.client
             .from('volunteers')
@@ -881,7 +896,14 @@ router.put('/applications/:id/approve', async (req, res) => {
             .single();
 
         if (volunteerError) {
-            console.error('Error creating volunteer record:', volunteerError);
+            console.error('❌ Error creating volunteer record:', volunteerError);
+            console.error('❌ Error details:', {
+                message: volunteerError.message,
+                details: volunteerError.details,
+                hint: volunteerError.hint,
+                code: volunteerError.code
+            });
+            console.error('❌ Volunteer data that failed:', volunteerData);
             // Don't fail the approval if volunteer creation fails
             console.log('⚠️ Application approved but volunteer record creation failed');
         } else {

@@ -25,8 +25,8 @@ import AdminPage from "./pages/AdminPage";
 const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
-			staleTime: 5 * 60 * 1000, // 5 minutes
-			cacheTime: 10 * 60 * 1000, // 10 minutes
+			staleTime: 0, // Always consider data stale (will refetch on invalidation)
+			cacheTime: 5 * 60 * 1000, // 5 minutes cache time
 			retry: 1, // Only retry once
 			refetchOnWindowFocus: false, // Don't refetch on window focus
 			refetchOnMount: true, // Refetch on mount

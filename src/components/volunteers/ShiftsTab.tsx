@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +57,9 @@ import {
 	useVolunteerShifts,
 	useCreateVolunteerShift,
 	useCommunities,
+	useVolunteerAttendance,
 } from "@/hooks/use-complete-api";
+import AssignVolunteerModal from "./AssignVolunteerModal";
 
 export const ShiftsTab = () => {
 	const [viewMode, setViewMode] = useState<"calendar" | "list">("list");
@@ -65,6 +67,8 @@ export const ShiftsTab = () => {
 	const [locationFilter, setLocationFilter] = useState("all");
 	const [selectedShift, setSelectedShift] = useState<any>(null);
 	const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+	const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+	const [shiftToAssign, setShiftToAssign] = useState<any>(null);
 
 	// Fetch real shifts data
 	const {
@@ -75,7 +79,47 @@ export const ShiftsTab = () => {
 		limit: 1000,
 	});
 
+	// Fetch attendance data to show assignments
+	const {
+		data: attendanceData,
+		isLoading: attendanceLoading,
+		error: attendanceError,
+	} = useVolunteerAttendance({
+		limit: 1000,
+	});
+
 	const shifts = shiftsData?.data || [];
+	const attendanceRecords = attendanceData?.data || [];
+
+	// Debug logging
+	React.useEffect(() => {
+		console.log("📊 ShiftsTab - Attendance data updated:", {
+			attendanceLoading,
+			attendanceError,
+			attendanceRecordsCount: attendanceRecords.length,
+			attendanceRecords: attendanceRecords,
+		});
+	}, [attendanceRecords, attendanceLoading, attendanceError]);
+
+	// Helper function to get assigned volunteers for a shift
+	const getAssignedVolunteers = (shiftId: string) => {
+		const assigned = attendanceRecords.filter(
+			(record: any) => record.shift_id === shiftId
+		);
+		console.log(
+			`🔍 Shift ${shiftId} has ${assigned.length} assigned volunteers:`,
+			assigned
+		);
+		console.log(`📊 Total attendance records:`, attendanceRecords.length);
+		console.log(`🔍 All attendance records:`, attendanceRecords);
+		return assigned;
+	};
+
+	// Helper function to handle volunteer assignment
+	const handleAssignVolunteers = (shift: any) => {
+		setShiftToAssign(shift);
+		setIsAssignModalOpen(true);
+	};
 
 	// Sort shifts by creation date (latest first) as a backup
 	const sortedShifts = [...shifts].sort(
@@ -233,144 +277,287 @@ export const ShiftsTab = () => {
 						<CardTitle>Shifts ({filteredShifts.length})</CardTitle>
 					</CardHeader>
 					<CardContent>
-						<Table>
-							<TableHeader>
-								<TableRow>
-									<TableHead>Shift Details</TableHead>
-									<TableHead>Requirements</TableHead>
-									<TableHead>Assignments</TableHead>
-									<TableHead>Event Association</TableHead>
-									<TableHead>Actions</TableHead>
-								</TableRow>
-							</TableHeader>
-							<TableBody>
-								{filteredShifts.length === 0 ? (
-									<TableRow>
-										<TableCell colSpan={5} className="text-center py-8">
-											<div className="flex items-center justify-center">
-												<CalendarIcon className="w-12 h-12 text-muted-foreground mr-4" />
-												<div>
-													<p className="text-lg font-medium">No shifts found</p>
-													<p className="text-sm text-muted-foreground">
-														{statusFilter !== "all" || locationFilter !== "all"
-															? "Try adjusting your filters"
-															: "No shifts have been created yet"}
-													</p>
-												</div>
-											</div>
-										</TableCell>
-									</TableRow>
-								) : (
-									filteredShifts.map((shift) => (
-										<TableRow key={shift.id}>
-											<TableCell>
-												<div className="space-y-1">
+						{/* Mobile Card View */}
+						<div className="block md:hidden space-y-4">
+							{filteredShifts.length === 0 ? (
+								<div className="text-center py-8">
+									<CalendarIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+									<p className="text-lg font-medium">No shifts found</p>
+									<p className="text-sm text-muted-foreground">
+										{statusFilter !== "all" || locationFilter !== "all"
+											? "Try adjusting your filters"
+											: "No shifts have been created yet"}
+									</p>
+								</div>
+							) : (
+								filteredShifts.map((shift) => {
+									const assignedVolunteers = getAssignedVolunteers(shift.id);
+									return (
+										<Card key={shift.id} className="p-4">
+											<div className="space-y-3">
+												<div className="flex items-center justify-between">
 													<div className="flex items-center space-x-2">
 														{getStatusIcon(shift.status)}
-														<p className="font-medium">{shift.title}</p>
-													</div>
-													<div className="flex items-center space-x-4 text-sm text-muted-foreground">
-														<div className="flex items-center space-x-1">
-															<CalendarIcon className="w-3 h-3" />
-															<span>{shift.shift_date}</span>
-														</div>
-														<div className="flex items-center space-x-1">
-															<Clock className="w-3 h-3" />
-															<span>
-																{shift.start_time} - {shift.end_time}
-															</span>
-														</div>
-														<div className="flex items-center space-x-1">
-															<MapPin className="w-3 h-3" />
-															<span>{shift.location}</span>
-														</div>
-													</div>
-												</div>
-											</TableCell>
-											<TableCell>
-												<div className="space-y-2">
-													<div className="text-sm">
-														<span className="font-medium">
-															{shift.required_volunteers}
-														</span>{" "}
-														volunteers needed
-													</div>
-													<div className="flex flex-wrap gap-1">
-														{shift.skills_required?.map((skill, index) => (
-															<Badge
-																key={index}
-																variant="outline"
-																className="text-xs">
-																{skill}
-															</Badge>
-														))}
-													</div>
-													<div className="text-xs text-muted-foreground">
-														Open position
-													</div>
-												</div>
-											</TableCell>
-											<TableCell>
-												<div className="space-y-2">
-													<div className="flex -space-x-2">
-														<div className="w-6 h-6 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center">
-															<Users className="w-3 h-3 text-gray-400" />
-														</div>
-													</div>
-													<div className="text-sm">
-														<span className="font-medium">0</span>/
-														{shift.required_volunteers} assigned
-													</div>
-													<div className="text-xs text-muted-foreground">
-														No assignments yet
+														<h3 className="font-medium">{shift.title}</h3>
 													</div>
 													{getStatusBadge(shift.status)}
 												</div>
-											</TableCell>
-											<TableCell>
-												<div className="space-y-1">
-													<p className="text-sm font-medium">
-														{shift.description || "General Volunteer Work"}
-													</p>
-													<p className="text-xs text-muted-foreground">
-														Created:{" "}
-														{new Date(shift.created_at).toLocaleDateString()}
-													</p>
+
+												<div className="space-y-2 text-sm text-muted-foreground">
+													<div className="flex items-center space-x-1">
+														<CalendarIcon className="w-3 h-3" />
+														<span>
+															{new Date(shift.shift_date).toLocaleDateString()}
+														</span>
+													</div>
+													<div className="flex items-center space-x-1">
+														<Clock className="w-3 h-3" />
+														<span>
+															{shift.start_time} - {shift.end_time}
+														</span>
+													</div>
+													<div className="flex items-center space-x-1">
+														<MapPin className="w-3 h-3" />
+														<span>{shift.location}</span>
+													</div>
 												</div>
-											</TableCell>
-											<TableCell>
-												<div className="flex items-center space-x-2">
-													<Button variant="outline" size="sm">
-														<UserPlus className="w-4 h-4" />
-													</Button>
-													<Dialog>
-														<DialogTrigger asChild>
-															<Button
-																variant="outline"
-																size="sm"
-																onClick={() => setSelectedShift(shift)}>
-																<Edit className="w-4 h-4" />
-															</Button>
-														</DialogTrigger>
-														<DialogContent className="max-w-2xl">
-															<DialogHeader>
-																<DialogTitle>Edit Shift</DialogTitle>
-															</DialogHeader>
-															{selectedShift && (
-																<EditShiftModal shift={selectedShift} />
-															)}
-														</DialogContent>
-													</Dialog>
-													<Button variant="outline" size="sm">
-														<Copy className="w-4 h-4" />
-													</Button>
+
+												<div className="flex items-center justify-between">
+													<div className="text-sm">
+														<span className="font-medium">
+															{assignedVolunteers.length}
+														</span>
+														/{shift.required_volunteers} assigned
+													</div>
+													<div className="flex space-x-2">
+														<Button
+															variant="outline"
+															size="sm"
+															onClick={() => handleAssignVolunteers(shift)}
+															title="Assign volunteers to this shift">
+															<UserPlus className="w-4 h-4" />
+														</Button>
+														<Button
+															variant="outline"
+															size="sm"
+															onClick={() => setSelectedShift(shift)}>
+															<Edit className="w-4 h-4" />
+														</Button>
+													</div>
+												</div>
+											</div>
+										</Card>
+									);
+								})
+							)}
+						</div>
+
+						{/* Desktop Table View */}
+						<div className="hidden md:block overflow-x-auto">
+							<Table>
+								<TableHeader>
+									<TableRow>
+										<TableHead className="min-w-[200px]">
+											Shift Details
+										</TableHead>
+										<TableHead className="min-w-[150px]">
+											Requirements
+										</TableHead>
+										<TableHead className="min-w-[150px]">Assignments</TableHead>
+										<TableHead className="min-w-[150px]">
+											Event Association
+										</TableHead>
+										<TableHead className="min-w-[120px]">Actions</TableHead>
+									</TableRow>
+								</TableHeader>
+								<TableBody>
+									{filteredShifts.length === 0 ? (
+										<TableRow>
+											<TableCell colSpan={5} className="text-center py-8">
+												<div className="flex items-center justify-center">
+													<CalendarIcon className="w-12 h-12 text-muted-foreground mr-4" />
+													<div>
+														<p className="text-lg font-medium">
+															No shifts found
+														</p>
+														<p className="text-sm text-muted-foreground">
+															{statusFilter !== "all" ||
+															locationFilter !== "all"
+																? "Try adjusting your filters"
+																: "No shifts have been created yet"}
+														</p>
+													</div>
 												</div>
 											</TableCell>
 										</TableRow>
-									))
-								)}
-							</TableBody>
-						</Table>
+									) : (
+										filteredShifts.map((shift) => (
+											<TableRow key={shift.id}>
+												<TableCell>
+													<div className="space-y-1">
+														<div className="flex items-center space-x-2">
+															{getStatusIcon(shift.status)}
+															<p className="font-medium">{shift.title}</p>
+														</div>
+														<div className="flex items-center space-x-4 text-sm text-muted-foreground">
+															<div className="flex items-center space-x-1">
+																<CalendarIcon className="w-3 h-3" />
+																<span>
+																	{new Date(
+																		shift.shift_date
+																	).toLocaleDateString()}
+																</span>
+															</div>
+															<div className="flex items-center space-x-1">
+																<Clock className="w-3 h-3" />
+																<span>
+																	{shift.start_time} - {shift.end_time}
+																</span>
+															</div>
+															<div className="flex items-center space-x-1">
+																<MapPin className="w-3 h-3" />
+																<span>{shift.location}</span>
+															</div>
+														</div>
+													</div>
+												</TableCell>
+												<TableCell>
+													<div className="space-y-2">
+														<div className="text-sm">
+															<span className="font-medium">
+																{shift.required_volunteers}
+															</span>{" "}
+															volunteers needed
+														</div>
+														<div className="flex flex-wrap gap-1">
+															{shift.skills_required?.map((skill, index) => (
+																<Badge
+																	key={index}
+																	variant="outline"
+																	className="text-xs">
+																	{skill}
+																</Badge>
+															))}
+														</div>
+														<div className="text-xs text-muted-foreground">
+															Open position
+														</div>
+													</div>
+												</TableCell>
+												<TableCell>
+													<div className="space-y-2">
+														{(() => {
+															const assignedVolunteers = getAssignedVolunteers(
+																shift.id
+															);
+															return (
+																<>
+																	<div className="flex -space-x-2">
+																		{assignedVolunteers.length > 0 ? (
+																			assignedVolunteers
+																				.slice(0, 3)
+																				.map((record: any, index: number) => (
+																					<Avatar
+																						key={index}
+																						className="w-6 h-6 border-2 border-white">
+																						<AvatarFallback className="text-xs">
+																							{record.volunteers?.first_name?.charAt(
+																								0
+																							)}
+																							{record.volunteers?.last_name?.charAt(
+																								0
+																							)}
+																						</AvatarFallback>
+																					</Avatar>
+																				))
+																		) : (
+																			<div className="w-6 h-6 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center">
+																				<Users className="w-3 h-3 text-gray-400" />
+																			</div>
+																		)}
+																		{assignedVolunteers.length > 3 && (
+																			<div className="w-6 h-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-xs">
+																				+{assignedVolunteers.length - 3}
+																			</div>
+																		)}
+																	</div>
+																	<div className="text-sm">
+																		<span className="font-medium">
+																			{assignedVolunteers.length}
+																		</span>
+																		/{shift.required_volunteers} assigned
+																	</div>
+																	<div className="text-xs text-muted-foreground">
+																		{assignedVolunteers.length === 0
+																			? "No assignments yet"
+																			: assignedVolunteers.length ===
+																			  shift.required_volunteers
+																			? "Fully staffed"
+																			: "Needs more volunteers"}
+																	</div>
+																	{getStatusBadge(shift.status)}
+																</>
+															);
+														})()}
+													</div>
+												</TableCell>
+												<TableCell>
+													<div className="space-y-1">
+														<p className="text-sm font-medium">
+															{shift.description || "General Volunteer Work"}
+														</p>
+														<p className="text-xs text-muted-foreground">
+															Created:{" "}
+															{new Date(shift.created_at).toLocaleDateString()}
+														</p>
+													</div>
+												</TableCell>
+												<TableCell>
+													<div className="flex items-center space-x-1 flex-wrap">
+														<Button
+															variant="outline"
+															size="sm"
+															onClick={() => handleAssignVolunteers(shift)}
+															className="flex items-center space-x-1 min-w-fit"
+															title="Assign volunteers to this shift">
+															<UserPlus className="w-4 h-4" />
+															<span className="hidden sm:inline">Assign</span>
+														</Button>
+														<Dialog>
+															<DialogTrigger asChild>
+																<Button
+																	variant="outline"
+																	size="sm"
+																	onClick={() => setSelectedShift(shift)}
+																	className="flex items-center space-x-1 min-w-fit">
+																	<Edit className="w-4 h-4" />
+																	<span className="hidden md:inline">Edit</span>
+																</Button>
+															</DialogTrigger>
+															<DialogContent className="max-w-2xl">
+																<DialogHeader>
+																	<DialogTitle>Edit Shift</DialogTitle>
+																</DialogHeader>
+																{selectedShift && (
+																	<EditShiftModal shift={selectedShift} />
+																)}
+															</DialogContent>
+														</Dialog>
+														<Button
+															variant="outline"
+															size="sm"
+															className="flex items-center space-x-1 min-w-fit">
+															<Copy className="w-4 h-4" />
+															<span className="hidden lg:inline">Copy</span>
+														</Button>
+													</div>
+												</TableCell>
+											</TableRow>
+										))
+									)}
+								</TableBody>
+							</Table>
+						</div>
 					</CardContent>
 				</Card>
 			) : (
@@ -392,6 +579,18 @@ export const ShiftsTab = () => {
 						</div>
 					</CardContent>
 				</Card>
+			)}
+
+			{/* Assign Volunteer Modal */}
+			{shiftToAssign && (
+				<AssignVolunteerModal
+					isOpen={isAssignModalOpen}
+					onClose={() => {
+						setIsAssignModalOpen(false);
+						setShiftToAssign(null);
+					}}
+					shift={shiftToAssign}
+				/>
 			)}
 		</div>
 	);
@@ -428,12 +627,27 @@ const CreateShiftModal = ({ onClose }: { onClose: () => void }) => {
 		}
 
 		try {
+			// Format date to avoid timezone issues
+			const localDate = new Date(
+				selectedDate.getTime() - selectedDate.getTimezoneOffset() * 60000
+			);
+			const formattedDate = localDate.toISOString().split("T")[0];
+
+			console.log(
+				"🗓️ Creating shift with date:",
+				formattedDate,
+				"times:",
+				formData.start_time,
+				"-",
+				formData.end_time
+			);
+
 			await createShiftMutation.mutateAsync({
 				community_id: communities[0]?.id || "", // Use first community for now
 				title: formData.title,
 				description: formData.description,
 				location: formData.location,
-				shift_date: selectedDate.toISOString().split("T")[0],
+				shift_date: formattedDate,
 				start_time: formData.start_time,
 				end_time: formData.end_time,
 				required_volunteers: formData.required_volunteers,

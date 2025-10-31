@@ -18,12 +18,6 @@ export const apiRequest = async (
 ) => {
 	const url = `${API_BASE_URL}${endpoint}`;
 
-	console.log("🔵 API Request:", {
-		method: options.method || "GET",
-		url,
-		body: options.body ? JSON.parse(options.body as string) : null,
-	});
-
 	const config: RequestInit = {
 		headers: {
 			"Content-Type": "application/json",
@@ -31,6 +25,13 @@ export const apiRequest = async (
 		},
 		...options,
 	};
+
+	console.log("🔵 API Request:", {
+		method: options.method || "GET",
+		url,
+		body: options.body ? JSON.parse(options.body as string) : null,
+		headers: config.headers,
+	});
 
 	// Add auth token if available
 	const token =
@@ -254,6 +255,10 @@ export interface PujaSeries {
 export interface VolunteerProfile {
 	id: string;
 	user_id: string;
+	first_name: string;
+	last_name: string;
+	email: string;
+	phone?: string;
 	skills: string[];
 	interests: string[];
 	availability?: any;
@@ -264,6 +269,7 @@ export interface VolunteerProfile {
 	rating?: number;
 	preferences?: any;
 	community_id?: string;
+	status: string;
 	created_at: string;
 	updated_at: string;
 	user?: User;
@@ -1416,15 +1422,15 @@ export interface VolunteerApplication {
 
 export interface VolunteerShift {
 	id: string;
-	community_id: string;
+	community_id?: string;
 	title: string;
 	description?: string;
-	location?: string;
+	location: string;
 	shift_date: string;
 	start_time: string;
 	end_time: string;
 	required_volunteers: number;
-	skills_required: string[];
+	skills_required?: string[];
 	status: string;
 	created_by?: string;
 	created_at: string;
@@ -1433,15 +1439,16 @@ export interface VolunteerShift {
 
 export interface VolunteerAttendance {
 	id: string;
-	shift_assignment_id: string;
 	volunteer_id: string;
 	shift_id: string;
+	status: string;
 	check_in_time?: string;
 	check_out_time?: string;
-	hours_worked: number;
-	status: string;
 	notes?: string;
-	checked_in_by?: string;
+	created_at: string;
+	updated_at: string;
+	volunteers?: VolunteerProfile;
+	volunteer_shifts?: VolunteerShift;
 	checked_out_by?: string;
 	created_at: string;
 	updated_at: string;
@@ -1523,6 +1530,12 @@ export function useVolunteers(params?: {
 			const endpoint = `/volunteers${queryString ? `?${queryString}` : ""}`;
 
 			const response = await apiRequest(endpoint);
+			console.log("📊 useVolunteers response:", {
+				endpoint,
+				dataCount: response?.data?.length || 0,
+				success: response?.success,
+				params,
+			});
 			return response;
 		},
 	});
@@ -1547,13 +1560,41 @@ export function useCreateVolunteer() {
 			availability?: any;
 			notes?: string;
 		}) => {
-			return await apiRequest("/volunteers", {
+			console.log("🔥 useCreateVolunteer mutationFn called with:", data);
+			const result = await apiRequest("/volunteers", {
 				method: "POST",
 				body: JSON.stringify(data),
 			});
+			console.log("🔥 useCreateVolunteer API result:", result);
+			return result;
 		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["volunteers"] });
+		onSuccess: (data) => {
+			console.log("🎉 Volunteer created, invalidating cache...", data);
+
+			// Force refetch by resetting volunteer queries (more aggressive than invalidate)
+			queryClient.resetQueries({
+				predicate: (query) => {
+					const isVolunteerQuery = query.queryKey[0] === "volunteers";
+					if (isVolunteerQuery) {
+						console.log("🔄 Resetting volunteer query:", query.queryKey);
+					}
+					return isVolunteerQuery;
+				},
+			});
+
+			// Also invalidate related queries
+			queryClient.invalidateQueries({
+				predicate: (query) => query.queryKey[0] === "volunteer-applications",
+			});
+			queryClient.invalidateQueries({
+				predicate: (query) => query.queryKey[0] === "volunteer-shifts",
+			});
+			queryClient.invalidateQueries({
+				predicate: (query) => query.queryKey[0] === "volunteer-attendance",
+			});
+
+			console.log("✅ Cache reset and invalidation completed");
+
 			toast({
 				title: "Volunteer created",
 				description: "Volunteer has been created successfully.",
@@ -1592,7 +1633,10 @@ export function useUpdateVolunteer() {
 			});
 		},
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["volunteers"] });
+			// Invalidate all volunteer-related queries
+			queryClient.invalidateQueries({
+				predicate: (query) => query.queryKey[0] === "volunteers",
+			});
 			toast({
 				title: "Volunteer updated",
 				description: "Volunteer has been updated successfully.",
@@ -1710,8 +1754,12 @@ export function useReviewVolunteerApplication() {
 			});
 		},
 		onSuccess: (data, variables) => {
-			queryClient.invalidateQueries({ queryKey: ["volunteer-applications"] });
-			queryClient.invalidateQueries({ queryKey: ["volunteers"] });
+			queryClient.invalidateQueries({
+				predicate: (query) => query.queryKey[0] === "volunteer-applications",
+			});
+			queryClient.invalidateQueries({
+				predicate: (query) => query.queryKey[0] === "volunteers",
+			});
 			toast({
 				title: `Application ${variables.status}`,
 				description: `Volunteer application has been ${variables.status} successfully.`,
@@ -1743,8 +1791,12 @@ export function useApproveVolunteerApplication() {
 			});
 		},
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["volunteer-applications"] });
-			queryClient.invalidateQueries({ queryKey: ["volunteers"] });
+			queryClient.invalidateQueries({
+				predicate: (query) => query.queryKey[0] === "volunteer-applications",
+			});
+			queryClient.invalidateQueries({
+				predicate: (query) => query.queryKey[0] === "volunteers",
+			});
 			toast({
 				title: "Application approved",
 				description: "Volunteer application has been approved successfully.",
@@ -1971,8 +2023,12 @@ export function useCheckOutVolunteer() {
 			);
 		},
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["volunteer-attendance"] });
-			queryClient.invalidateQueries({ queryKey: ["volunteers"] });
+			queryClient.invalidateQueries({
+				predicate: (query) => query.queryKey[0] === "volunteer-attendance",
+			});
+			queryClient.invalidateQueries({
+				predicate: (query) => query.queryKey[0] === "volunteers",
+			});
 			toast({
 				title: "Check-out successful",
 				description: "Volunteer has been checked out successfully.",
@@ -2008,9 +2064,10 @@ export function useCreateAttendance() {
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["volunteer-attendance"] });
+			queryClient.invalidateQueries({ queryKey: ["volunteer-shifts"] });
 			toast({
-				title: "Attendance recorded",
-				description: "Attendance has been recorded successfully.",
+				title: "Volunteer assigned",
+				description: "Volunteer has been assigned to the shift successfully.",
 			});
 		},
 		onError: (error: any) => {
@@ -2042,6 +2099,7 @@ export function useUpdateAttendance() {
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["volunteer-attendance"] });
+			queryClient.invalidateQueries({ queryKey: ["volunteer-shifts"] });
 			toast({
 				title: "Attendance updated",
 				description: "Attendance has been updated successfully.",

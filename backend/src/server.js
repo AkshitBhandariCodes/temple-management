@@ -14,8 +14,8 @@ const applicationRoutes = require('./routes/applications');
 const frontendCompatibleRoutes = require('./routes/applications-frontend-compatible');
 const reportsRoutes = require('./routes/reports');
 const debugRoutes = require('./routes/debug');
-const donationRoutes = require('./routes/donations');
-const expenseRoutes = require('./routes/expenses');
+// const donationRoutes = require('./routes/donations'); // Temporarily disabled - MongoDB not connected
+// const expenseRoutes = require('./routes/expenses'); // Temporarily disabled - MongoDB not connected
 const eventRoutes = require('./routes/events');
 const taskRoutes = require('./routes/tasks');
 const volunteerRoutes = require('./routes/volunteers-simple');
@@ -45,7 +45,7 @@ app.use(helmet({
 app.use(compression());
 app.use(morgan('combined'));
 app.use(cors({
-  origin: ['http://localhost:8080', 'http://localhost:5173', 'http://localhost:3000', 'http://localhost:4173'],
+  origin: ['http://localhost:8080', 'http://localhost:8081', 'http://localhost:5173', 'http://localhost:3000', 'http://localhost:4173'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -80,8 +80,8 @@ app.use('/api', reportsRoutes); // Reports and calendar routes
 app.use('/api', debugRoutes); // Debug routes for troubleshooting
 app.use('/api', eventRoutes); // Events management routes
 app.use('/api', taskRoutes); // Tasks management routes
-app.use('/api/donations', donationRoutes);
-app.use('/api/expenses', expenseRoutes);
+// app.use('/api/donations', donationRoutes); // Temporarily disabled - MongoDB not connected
+// app.use('/api/expenses', expenseRoutes); // Temporarily disabled - MongoDB not connected
 app.use('/api/volunteers', volunteerRoutes);
 app.use('/api/broadcasts', broadcastRoutes);
 app.use('/api/templates', templateRoutes);

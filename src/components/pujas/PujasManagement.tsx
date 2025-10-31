@@ -29,6 +29,8 @@ import StatusUpdateModal from "./StatusUpdateModal";
 import { usePujaSeries } from "@/hooks/use-complete-api";
 
 const PujasManagement = () => {
+	console.log("🔵 PujasManagement component rendering...");
+
 	const [activeTab, setActiveTab] = useState("list");
 	const [searchTerm, setSearchTerm] = useState("");
 	const [statusFilter, setStatusFilter] = useState("all");
@@ -39,11 +41,11 @@ const PujasManagement = () => {
 	const [showExceptionModal, setShowExceptionModal] = useState(false);
 
 	// Generate puja instances from series data for Calendar and Schedule views
-	const generatePujaInstances = (seriesData) => {
-		const instances = [];
+	const generatePujaInstances = (seriesData: any[]) => {
+		const instances: any[] = [];
 		const today = new Date();
 
-		seriesData.forEach((series) => {
+		seriesData.forEach((series: any) => {
 			// Generate instances for the next 30 days based on series schedule
 			for (let i = 0; i < 30; i++) {
 				const instanceDate = new Date(today);
@@ -102,7 +104,7 @@ const PujasManagement = () => {
 	};
 
 	// Helper function to determine if an instance should be created for a specific date
-	const shouldCreateInstanceForDate = (series, date) => {
+	const shouldCreateInstanceForDate = (series: any, date: Date) => {
 		const config = series.schedule_config || {};
 		const seriesName = series.name?.toLowerCase() || "";
 
@@ -164,22 +166,22 @@ const PujasManagement = () => {
 	const mockLocations = ["Main Temple", "Prayer Hall", "Meditation Room"];
 
 	// Handler functions for child components
-	const handleInstanceClick = (instance) => {
+	const handleInstanceClick = (instance: any) => {
 		setSelectedPuja(instance);
 		setShowInstanceModal(true);
 	};
 
-	const handleStatusUpdate = (instance) => {
+	const handleStatusUpdate = (instance: any) => {
 		setSelectedPuja(instance);
 		setShowStatusModal(true);
 	};
 
-	const handleAddException = (instance) => {
+	const handleAddException = (instance: any) => {
 		setSelectedPuja(instance);
 		setShowExceptionModal(true);
 	};
 
-	const handleCreateSave = (formData) => {
+	const handleCreateSave = (formData: any) => {
 		console.log("Creating puja series:", formData);
 		setShowCreateModal(false);
 		// TODO: Implement actual save logic
@@ -195,13 +197,21 @@ const PujasManagement = () => {
 		limit: 1000,
 	});
 
+	// Debug logging
+	console.log("🔵 PujasManagement Debug:", {
+		pujaSeriesData,
+		isLoading,
+		error,
+		statusFilter,
+	});
+
 	const pujaSeries = pujaSeriesData?.data || [];
 
 	// Generate puja instances from series data
 	const pujaInstances = generatePujaInstances(pujaSeries);
 
 	const filteredSeries = pujaSeries.filter(
-		(series) =>
+		(series: any) =>
 			series.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
 			series.description?.toLowerCase().includes(searchTerm.toLowerCase())
 	);
@@ -225,11 +235,15 @@ const PujasManagement = () => {
 	}
 
 	if (error) {
+		console.error("❌ Pujas API Error:", error);
 		return (
 			<div className="flex items-center justify-center h-96">
 				<div className="text-center">
 					<div className="text-red-500 mb-4">Failed to load puja series</div>
-					<p className="text-muted-foreground">Please try again later</p>
+					<p className="text-muted-foreground">Error: {error.message}</p>
+					<p className="text-xs text-gray-500 mt-2">
+						Check console for details
+					</p>
 				</div>
 			</div>
 		);
@@ -400,7 +414,7 @@ const PujasManagement = () => {
 						</div>
 					) : (
 						<div className="space-y-4">
-							{filteredSeries.map((series) => (
+							{filteredSeries.map((series: any) => (
 								<div
 									key={series.id}
 									className="bg-card text-card-foreground rounded-lg border p-6">
@@ -480,7 +494,7 @@ const PujasManagement = () => {
 					<StatusUpdateModal
 						isOpen={showStatusModal}
 						onClose={() => setShowStatusModal(false)}
-						onSave={(data) => {
+						onSave={(data: any) => {
 							console.log("Status update:", data);
 							setShowStatusModal(false);
 						}}
@@ -489,7 +503,7 @@ const PujasManagement = () => {
 					<ExceptionManagementModal
 						isOpen={showExceptionModal}
 						onClose={() => setShowExceptionModal(false)}
-						onSave={(data) => {
+						onSave={(data: any) => {
 							console.log("Exception added:", data);
 							setShowExceptionModal(false);
 						}}

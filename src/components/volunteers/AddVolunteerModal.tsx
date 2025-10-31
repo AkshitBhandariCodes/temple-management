@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 interface AddVolunteerModalProps {
 	isOpen: boolean;
 	onClose: () => void;
+	onSuccess?: () => void;
 }
 
 const SKILL_OPTIONS = [
@@ -65,10 +66,18 @@ const INTEREST_OPTIONS = [
 export default function AddVolunteerModal({
 	isOpen,
 	onClose,
+	onSuccess,
 }: AddVolunteerModalProps) {
 	const { toast } = useToast();
 	const { data: communitiesData } = useCommunities();
 	const createVolunteerMutation = useCreateVolunteer();
+
+	console.log("🔧 Mutation hook state:", {
+		isPending: createVolunteerMutation.isPending,
+		isError: createVolunteerMutation.isError,
+		error: createVolunteerMutation.error,
+		mutateAsync: typeof createVolunteerMutation.mutateAsync,
+	});
 
 	const [formData, setFormData] = useState({
 		first_name: "",
@@ -98,6 +107,12 @@ export default function AddVolunteerModal({
 	});
 
 	const communities = communitiesData?.data || [];
+
+	console.log("🏘️ Communities data:", {
+		communitiesData,
+		communitiesCount: communities.length,
+		communities: communities.map((c) => ({ id: c.id, name: c.name })),
+	});
 
 	const handleInputChange = (field: string, value: any) => {
 		if (field.includes(".")) {
@@ -154,12 +169,25 @@ export default function AddVolunteerModal({
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 
+		// Add alert to verify form submission is triggered
+		alert("Form submitted! Check console for details.");
+
+		console.log("🔥 Form submitted with data:", formData);
+		console.log("🔥 Validation check:", {
+			first_name: !!formData.first_name,
+			last_name: !!formData.last_name,
+			email: !!formData.email,
+			community_id: !!formData.community_id,
+			community_id_value: formData.community_id,
+		});
+
 		if (
 			!formData.first_name ||
 			!formData.last_name ||
 			!formData.email ||
 			!formData.community_id
 		) {
+			console.log("❌ Validation failed - missing required fields");
 			toast({
 				title: "Missing fields",
 				description:
@@ -169,8 +197,10 @@ export default function AddVolunteerModal({
 			return;
 		}
 
+		console.log("✅ Validation passed, proceeding with creation");
+
 		try {
-			await createVolunteerMutation.mutateAsync({
+			const volunteerData = {
 				first_name: formData.first_name,
 				last_name: formData.last_name,
 				email: formData.email,
@@ -179,7 +209,30 @@ export default function AddVolunteerModal({
 				skills: formData.skills,
 				interests: formData.interests,
 				notes: formData.notes,
+			};
+
+			// TODO: Add these fields after running the database migration:
+			// date_of_birth: formData.date_of_birth,
+			// address: formData.address,
+			// emergency_contact: formData.emergency_contact,
+			// availability: formData.availability,
+
+			console.log("🚀 Creating volunteer with complete data:", volunteerData);
+
+			console.log("🔥 About to call createVolunteerMutation.mutateAsync");
+			console.log("🔥 Mutation state:", {
+				isLoading: createVolunteerMutation.isPending,
+				isError: createVolunteerMutation.isError,
+				error: createVolunteerMutation.error,
 			});
+
+			const result = await createVolunteerMutation.mutateAsync(volunteerData);
+			console.log("🔥 Mutation completed with result:", result);
+
+			console.log("✅ Volunteer created successfully:", result);
+
+			// Add a small delay to ensure cache invalidation completes
+			await new Promise((resolve) => setTimeout(resolve, 500));
 
 			// Reset form and close modal
 			setFormData({
@@ -196,9 +249,27 @@ export default function AddVolunteerModal({
 				availability: { weekdays: [], times: [] },
 				notes: "",
 			});
+
+			// Call success callback to switch to volunteers tab
+			if (onSuccess) {
+				onSuccess();
+			}
+
 			onClose();
 		} catch (error) {
-			console.error("Failed to create volunteer:", error);
+			console.error("❌ Failed to create volunteer:", error);
+			console.error("❌ Error details:", {
+				message: error.message,
+				stack: error.stack,
+				response: error.response,
+			});
+
+			// Show error toast
+			toast({
+				title: "Failed to create volunteer",
+				description: error.message || "An unexpected error occurred",
+				variant: "destructive",
+			});
 		}
 	};
 
@@ -541,6 +612,34 @@ export default function AddVolunteerModal({
 					<div className="flex justify-end space-x-2 pt-4 border-t">
 						<Button type="button" variant="outline" onClick={onClose}>
 							Cancel
+						</Button>
+						<Button
+							type="button"
+							variant="secondary"
+							onClick={async () => {
+								console.log("🧪 Testing direct API call...");
+								try {
+									const testData = {
+										first_name: "Test",
+										last_name: "Direct",
+										email: `test.direct.${Date.now()}@example.com`,
+										phone: "+1-555-TEST",
+										community_id: "5cf9beff-483d-43f0-8ca3-9fba851b283a",
+										skills: ["Testing"],
+										interests: ["API Testing"],
+										notes: "Direct API test",
+									};
+									const result = await createVolunteerMutation.mutateAsync(
+										testData
+									);
+									console.log("🧪 Direct API test result:", result);
+									alert("Direct API test successful!");
+								} catch (error) {
+									console.error("🧪 Direct API test failed:", error);
+									alert(`Direct API test failed: ${error.message}`);
+								}
+							}}>
+							Test API
 						</Button>
 						<Button
 							type="submit"

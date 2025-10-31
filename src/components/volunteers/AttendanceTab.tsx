@@ -41,6 +41,7 @@ import {
 	Edit3,
 	Users,
 	Loader2,
+	UserPlus,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -57,6 +58,7 @@ export const AttendanceTab = () => {
 	);
 	const [selectedShift, setSelectedShift] = useState<string>("all");
 	const [selectedVolunteer, setSelectedVolunteer] = useState<string>("all");
+	const [showAllVolunteers, setShowAllVolunteers] = useState(false);
 
 	// Fetch real data
 	const { data: volunteersData, isLoading: volunteersLoading } = useVolunteers({
@@ -91,6 +93,8 @@ export const AttendanceTab = () => {
 				return <AlertTriangle className="w-4 h-4 text-yellow-600" />;
 			case "excused":
 				return <Info className="w-4 h-4 text-blue-600" />;
+			case "scheduled":
+				return <Clock className="w-4 h-4 text-blue-600" />;
 			default:
 				return <div className="w-4 h-4 bg-gray-300 rounded-full" />;
 		}
@@ -127,6 +131,13 @@ export const AttendanceTab = () => {
 						<span>Excused</span>
 					</Badge>
 				);
+			case "scheduled":
+				return (
+					<Badge className="bg-blue-100 text-blue-800 flex items-center space-x-1">
+						<Clock className="w-3 h-3" />
+						<span>Scheduled</span>
+					</Badge>
+				);
 			default:
 				return <Badge variant="secondary">Not Marked</Badge>;
 		}
@@ -146,6 +157,9 @@ export const AttendanceTab = () => {
 	// Calculate attendance statistics
 	const calculateStats = () => {
 		const totalRecords = attendanceRecords.length;
+		const scheduledRecords = attendanceRecords.filter(
+			(r) => r.status === "scheduled"
+		).length;
 		const presentRecords = attendanceRecords.filter(
 			(r) => r.status === "present" || r.status === "completed"
 		).length;
@@ -158,6 +172,7 @@ export const AttendanceTab = () => {
 
 		return {
 			total: totalRecords,
+			scheduled: scheduledRecords,
 			present: presentRecords,
 			absent: absentRecords,
 			late: lateRecords,
@@ -192,6 +207,15 @@ export const AttendanceTab = () => {
 							<span>Attendance Tracking</span>
 						</div>
 						<div className="flex items-center space-x-2">
+							<Button
+								variant={showAllVolunteers ? "default" : "outline"}
+								size="sm"
+								onClick={() => setShowAllVolunteers(!showAllVolunteers)}>
+								<Users className="w-4 h-4 mr-2" />
+								{showAllVolunteers
+									? "Show Assigned Only"
+									: "Show All Volunteers"}
+							</Button>
 							<Button variant="outline" size="sm">
 								<Download className="w-4 h-4 mr-2" />
 								Export Report
@@ -251,12 +275,18 @@ export const AttendanceTab = () => {
 					</div>
 
 					{/* Statistics */}
-					<div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-						<div className="text-center p-4 bg-blue-50 rounded-lg">
-							<div className="text-2xl font-bold text-blue-600">
+					<div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+						<div className="text-center p-4 bg-gray-50 rounded-lg">
+							<div className="text-2xl font-bold text-gray-600">
 								{stats.total}
 							</div>
-							<div className="text-sm text-blue-600">Total Records</div>
+							<div className="text-sm text-gray-600">Total Records</div>
+						</div>
+						<div className="text-center p-4 bg-blue-50 rounded-lg">
+							<div className="text-2xl font-bold text-blue-600">
+								{stats.scheduled}
+							</div>
+							<div className="text-sm text-blue-600">Scheduled</div>
 						</div>
 						<div className="text-center p-4 bg-green-50 rounded-lg">
 							<div className="text-2xl font-bold text-green-600">
@@ -315,6 +345,7 @@ export const AttendanceTab = () => {
 										getAttendanceForVolunteerShift
 									}
 									getAttendanceBadge={getAttendanceBadge}
+									showAllVolunteers={showAllVolunteers}
 								/>
 							))}
 						</div>
@@ -429,6 +460,7 @@ const ShiftAttendanceCard = ({
 	attendanceRecords,
 	getAttendanceForVolunteerShift,
 	getAttendanceBadge,
+	showAllVolunteers = false,
 }: any) => {
 	const createAttendanceMutation = useCreateAttendance();
 	const updateAttendanceMutation = useUpdateAttendance();
@@ -442,6 +474,10 @@ const ShiftAttendanceCard = ({
 			return;
 		}
 
+		console.log(
+			`📊 Marking attendance for volunteer ${volunteerId} as ${status}`
+		);
+
 		// Add volunteer to pending set
 		setPendingVolunteers((prev) => new Set(prev).add(volunteerId));
 
@@ -452,6 +488,10 @@ const ShiftAttendanceCard = ({
 			);
 
 			if (existingAttendance) {
+				console.log(
+					`🔄 Updating existing attendance record:`,
+					existingAttendance
+				);
 				// Update existing attendance record
 				await updateAttendanceMutation.mutateAsync({
 					id: existingAttendance.id,
@@ -462,6 +502,9 @@ const ShiftAttendanceCard = ({
 						status === "absent" ? undefined : existingAttendance.check_out_time,
 				});
 			} else {
+				console.log(
+					`📝 Creating new attendance record for volunteer ${volunteerId}`
+				);
 				// Create new attendance record
 				await createAttendanceMutation.mutateAsync({
 					volunteer_id: volunteerId,
@@ -471,8 +514,9 @@ const ShiftAttendanceCard = ({
 						status === "present" ? new Date().toISOString() : undefined,
 				});
 			}
+			console.log(`✅ Successfully marked attendance as ${status}`);
 		} catch (error) {
-			console.error("Failed to mark attendance:", error);
+			console.error("❌ Failed to mark attendance:", error);
 		} finally {
 			// Remove volunteer from pending set
 			setPendingVolunteers((prev) => {
@@ -483,8 +527,30 @@ const ShiftAttendanceCard = ({
 		}
 	};
 
-	// Get volunteers who should be at this shift (for now, show all volunteers)
-	const shiftVolunteers = volunteers.slice(0, shift.required_volunteers || 5);
+	// Get volunteers who are assigned to this shift (have attendance records)
+	const assignedVolunteerIds = attendanceRecords
+		.filter((record: any) => record.shift_id === shift.id)
+		.map((record: any) => record.volunteer_id);
+
+	// Choose volunteers to show based on toggle
+	const shiftVolunteers = showAllVolunteers
+		? volunteers.slice(0, shift.required_volunteers || 5) // Show first N volunteers for testing
+		: volunteers.filter((volunteer: any) =>
+				assignedVolunteerIds.includes(volunteer.id)
+		  );
+
+	console.log(`📊 Shift ${shift.id} (${shift.title}):`, {
+		totalAttendanceRecords: attendanceRecords.length,
+		assignedVolunteerIds,
+		shiftVolunteers: shiftVolunteers.length,
+		totalVolunteers: volunteers.length,
+		showAllVolunteers,
+	});
+
+	// If no volunteers are assigned, show a message or allow manual assignment
+	if (!showAllVolunteers && shiftVolunteers.length === 0) {
+		console.log(`⚠️ No volunteers assigned to shift ${shift.title}`);
+	}
 
 	return (
 		<div className="border rounded-lg p-4">
@@ -515,6 +581,15 @@ const ShiftAttendanceCard = ({
 					{/* Attendance Summary */}
 					<div className="mt-2 text-sm">
 						<div className="flex space-x-4">
+							<span className="text-blue-600">
+								Scheduled:{" "}
+								{
+									shiftVolunteers.filter((v: any) => {
+										const att = getAttendanceForVolunteerShift(v.id, shift.id);
+										return att?.status === "scheduled";
+									}).length
+								}
+							</span>
 							<span className="text-green-600">
 								Present:{" "}
 								{
@@ -539,66 +614,73 @@ const ShiftAttendanceCard = ({
 			</div>
 
 			<div className="space-y-3">
-				{shiftVolunteers.map((volunteer: any) => {
-					const attendance = getAttendanceForVolunteerShift(
-						volunteer.id,
-						shift.id
-					);
+				{!showAllVolunteers && shiftVolunteers.length === 0 ? (
+					<div className="text-center py-8 bg-gray-50 rounded-lg">
+						<Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+						<p className="text-lg font-medium">No volunteers assigned</p>
+						<p className="text-sm text-muted-foreground mb-4">
+							No volunteers have been assigned to this shift yet.
+						</p>
+						<Button
+							variant="outline"
+							size="sm"
+							className="mb-2"
+							onClick={() => {
+								// Navigate to shifts tab - this would need to be passed as a prop
+								console.log("Navigate to shifts tab to assign volunteers");
+							}}>
+							<UserPlus className="w-4 h-4 mr-2" />
+							Assign Volunteers
+						</Button>
+						<p className="text-xs text-muted-foreground">
+							Or go to the Shifts tab to assign volunteers to this shift.
+						</p>
+					</div>
+				) : (
+					shiftVolunteers.map((volunteer: any) => {
+						const attendance = getAttendanceForVolunteerShift(
+							volunteer.id,
+							shift.id
+						);
 
-					return (
-						<div
-							key={volunteer.id}
-							className={`flex items-center justify-between p-3 rounded ${
-								attendance?.status === "present"
-									? "bg-green-50 border-l-4 border-green-500"
-									: attendance?.status === "absent"
-									? "bg-red-50 border-l-4 border-red-500"
-									: "bg-gray-50"
-							}`}>
-							<div className="flex items-center space-x-3">
-								<Avatar className="w-8 h-8">
-									<AvatarFallback>
-										{volunteer.first_name?.charAt(0)}
-										{volunteer.last_name?.charAt(0)}
-									</AvatarFallback>
-								</Avatar>
-								<div>
-									<p className="font-medium">
-										{volunteer.first_name} {volunteer.last_name}
-									</p>
-									<p className="text-sm text-muted-foreground">
-										{volunteer.email}
-									</p>
+						return (
+							<div
+								key={volunteer.id}
+								className={`flex items-center justify-between p-3 rounded ${
+									attendance?.status === "present"
+										? "bg-green-50 border-l-4 border-green-500"
+										: attendance?.status === "absent"
+										? "bg-red-50 border-l-4 border-red-500"
+										: "bg-gray-50"
+								}`}>
+								<div className="flex items-center space-x-3">
+									<Avatar className="w-8 h-8">
+										<AvatarFallback>
+											{volunteer.first_name?.charAt(0)}
+											{volunteer.last_name?.charAt(0)}
+										</AvatarFallback>
+									</Avatar>
+									<div>
+										<p className="font-medium">
+											{volunteer.first_name} {volunteer.last_name}
+										</p>
+										<p className="text-sm text-muted-foreground">
+											{volunteer.email}
+										</p>
+									</div>
 								</div>
-							</div>
-							<div className="flex items-center space-x-3">
-								{attendance ? (
-									<div className="flex items-center space-x-2">
-										{getAttendanceBadge(attendance.status)}
-										{/* Only show buttons if not marked as present */}
-										{attendance.status !== "present" && (
-											<div className="flex space-x-1">
-												<Button
-													size="sm"
-													className="bg-green-600 hover:bg-green-700"
-													onClick={() =>
-														handleMarkAttendance(volunteer.id, "present")
-													}
-													disabled={
-														createAttendanceMutation.isPending ||
-														updateAttendanceMutation.isPending ||
-														pendingVolunteers.has(volunteer.id)
-													}>
-													{pendingVolunteers.has(volunteer.id)
-														? "Updating..."
-														: "Mark Present"}
-												</Button>
-												{attendance.status !== "absent" && (
+								<div className="flex items-center space-x-3">
+									{attendance ? (
+										<div className="flex items-center space-x-2">
+											{getAttendanceBadge(attendance.status)}
+											{/* Only show buttons if not marked as present */}
+											{attendance.status !== "present" && (
+												<div className="flex space-x-1">
 													<Button
 														size="sm"
-														variant="destructive"
+														className="bg-green-600 hover:bg-green-700"
 														onClick={() =>
-															handleMarkAttendance(volunteer.id, "absent")
+															handleMarkAttendance(volunteer.id, "present")
 														}
 														disabled={
 															createAttendanceMutation.isPending ||
@@ -607,57 +689,74 @@ const ShiftAttendanceCard = ({
 														}>
 														{pendingVolunteers.has(volunteer.id)
 															? "Updating..."
-															: "Mark Absent"}
+															: "Mark Present"}
 													</Button>
-												)}
-											</div>
-										)}
-										{/* Show completion message when marked as present */}
-										{attendance.status === "present" && (
-											<div className="text-sm text-green-600 font-medium flex items-center space-x-1">
-												<CheckCircle className="w-4 h-4" />
-												<span>Attendance Recorded</span>
-											</div>
-										)}
-									</div>
-								) : (
-									<div className="flex space-x-2">
-										<Button
-											size="sm"
-											className="bg-green-600 hover:bg-green-700"
-											onClick={() =>
-												handleMarkAttendance(volunteer.id, "present")
-											}
-											disabled={
-												createAttendanceMutation.isPending ||
-												updateAttendanceMutation.isPending ||
-												pendingVolunteers.has(volunteer.id)
-											}>
-											{pendingVolunteers.has(volunteer.id)
-												? "Marking..."
-												: "Present"}
-										</Button>
-										<Button
-											size="sm"
-											variant="destructive"
-											onClick={() =>
-												handleMarkAttendance(volunteer.id, "absent")
-											}
-											disabled={
-												createAttendanceMutation.isPending ||
-												updateAttendanceMutation.isPending ||
-												pendingVolunteers.has(volunteer.id)
-											}>
-											{pendingVolunteers.has(volunteer.id)
-												? "Marking..."
-												: "Absent"}
-										</Button>
-									</div>
-								)}
+													{attendance.status !== "absent" && (
+														<Button
+															size="sm"
+															variant="destructive"
+															onClick={() =>
+																handleMarkAttendance(volunteer.id, "absent")
+															}
+															disabled={
+																createAttendanceMutation.isPending ||
+																updateAttendanceMutation.isPending ||
+																pendingVolunteers.has(volunteer.id)
+															}>
+															{pendingVolunteers.has(volunteer.id)
+																? "Updating..."
+																: "Mark Absent"}
+														</Button>
+													)}
+												</div>
+											)}
+											{/* Show completion message when marked as present */}
+											{attendance.status === "present" && (
+												<div className="text-sm text-green-600 font-medium flex items-center space-x-1">
+													<CheckCircle className="w-4 h-4" />
+													<span>Attendance Recorded</span>
+												</div>
+											)}
+										</div>
+									) : (
+										<div className="flex space-x-2">
+											<Button
+												size="sm"
+												className="bg-green-600 hover:bg-green-700"
+												onClick={() =>
+													handleMarkAttendance(volunteer.id, "present")
+												}
+												disabled={
+													createAttendanceMutation.isPending ||
+													updateAttendanceMutation.isPending ||
+													pendingVolunteers.has(volunteer.id)
+												}>
+												{pendingVolunteers.has(volunteer.id)
+													? "Marking..."
+													: "Present"}
+											</Button>
+											<Button
+												size="sm"
+												variant="destructive"
+												onClick={() =>
+													handleMarkAttendance(volunteer.id, "absent")
+												}
+												disabled={
+													createAttendanceMutation.isPending ||
+													updateAttendanceMutation.isPending ||
+													pendingVolunteers.has(volunteer.id)
+												}>
+												{pendingVolunteers.has(volunteer.id)
+													? "Marking..."
+													: "Absent"}
+											</Button>
+										</div>
+									)}
+								</div>
 							</div>
-						</div>
-					);
-				})}
+						);
+					})
+				)}
 			</div>
 		</div>
 	);

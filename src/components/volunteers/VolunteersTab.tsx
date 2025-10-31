@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,11 +65,34 @@ export const VolunteersTab = () => {
 		data: volunteersData,
 		isLoading,
 		error,
+		refetch,
 	} = useVolunteers({
 		limit: 1000,
 	});
 
 	const volunteers = volunteersData?.data || [];
+
+	// Debug: Log when volunteers data changes
+	useEffect(() => {
+		console.log("🔄 Volunteers data changed:", {
+			count: volunteers.length,
+			isLoading,
+			hasError: !!error,
+			timestamp: new Date().toISOString(),
+			latestVolunteer: volunteers[0]
+				? `${volunteers[0].first_name} ${volunteers[0].last_name}`
+				: "None",
+		});
+	}, [volunteers.length, isLoading, error]);
+
+	// Debug: Log the current data
+	console.log("👥 VolunteersTab render:", {
+		volunteersCount: volunteers.length,
+		isLoading,
+		hasError: !!error,
+		timestamp: new Date().toISOString(),
+		volunteerEmails: volunteers.map((v) => v.email).slice(0, 3), // Show first 3 emails for debugging
+	});
 
 	const filteredVolunteers = volunteers.filter((volunteer) => {
 		const fullName = `${volunteer.first_name || ""} ${
@@ -135,6 +158,38 @@ export const VolunteersTab = () => {
 					<Badge variant="secondary" className="text-sm">
 						{filteredVolunteers.length} volunteers
 					</Badge>
+				</div>
+				<div className="flex space-x-2">
+					<Button
+						variant="outline"
+						onClick={() => {
+							console.log("🔄 Manual refresh triggered");
+							refetch();
+						}}>
+						Refresh
+					</Button>
+					<Button
+						variant="outline"
+						onClick={async () => {
+							console.log("🧪 Testing API connection...");
+							try {
+								const response = await fetch(
+									"http://localhost:5000/api/volunteers?limit=1"
+								);
+								const data = await response.json();
+								console.log("🧪 API test result:", data);
+								alert(
+									`API test: ${data.success ? "SUCCESS" : "FAILED"} - ${
+										data.data?.length || 0
+									} volunteers`
+								);
+							} catch (error) {
+								console.error("🧪 API test failed:", error);
+								alert(`API test FAILED: ${error.message}`);
+							}
+						}}>
+						Test API
+					</Button>
 				</div>
 			</div>
 

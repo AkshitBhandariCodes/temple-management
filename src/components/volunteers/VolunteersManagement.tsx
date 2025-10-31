@@ -258,7 +258,7 @@ export const VolunteersManagement = () => {
 				</TabsList>
 
 				<TabsContent value="dashboard">
-					<DashboardTab />
+					<DashboardTab quickStats={quickStats} />
 				</TabsContent>
 
 				<TabsContent value="volunteers">
@@ -286,6 +286,12 @@ export const VolunteersManagement = () => {
 			<AddVolunteerModal
 				isOpen={showAddVolunteerModal}
 				onClose={() => setShowAddVolunteerModal(false)}
+				onSuccess={() => {
+					console.log(
+						"🎯 Switching to volunteers tab after successful creation"
+					);
+					setActiveTab("volunteers");
+				}}
 			/>
 		</div>
 	);

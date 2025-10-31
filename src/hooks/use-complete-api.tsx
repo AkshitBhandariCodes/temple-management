@@ -897,47 +897,118 @@ export function usePujaSeries(params?: {
 	});
 }
 
-// ================================================
-// VOLUNTEERS HOOKS
-// ================================================
+export function useCreatePujaSeries() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
 
-export function useVolunteers(params?: {
-	community_id?: string;
-	skills?: string[];
-	status?: string;
-	page?: number;
-	limit?: number;
-}) {
-	return useQuery({
-		queryKey: ["volunteers", params],
-		queryFn: async () => {
-			const queryParams = new URLSearchParams();
+	return useMutation({
+		mutationFn: async (data: {
+			community_id: string;
+			name: string;
+			description?: string;
+			deity?: string;
+			type?: string;
+			start_date: string;
+			end_date?: string;
+			schedule_config?: any;
+			duration_minutes?: number;
+			max_participants?: number;
+			registration_required?: boolean;
+			priest_id?: string;
+			location?: string;
+			requirements?: string[];
+			notes?: string;
+		}) => {
+			return await apiRequest("/pujas", {
+				method: "POST",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["puja-series"] });
+			toast({
+				title: "Puja series created",
+				description: "Puja series has been created successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to create puja series",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
 
-			if (params?.community_id && params.community_id !== "all") {
-				queryParams.append("community_id", params.community_id);
-			}
+export function useUpdatePujaSeries() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
 
-			if (params?.status && params.status !== "all") {
-				queryParams.append("status", params.status);
-			}
+	return useMutation({
+		mutationFn: async (data: {
+			id: string;
+			name?: string;
+			description?: string;
+			deity?: string;
+			type?: string;
+			start_date?: string;
+			end_date?: string;
+			schedule_config?: any;
+			duration_minutes?: number;
+			max_participants?: number;
+			registration_required?: boolean;
+			priest_id?: string;
+			location?: string;
+			requirements?: string[];
+			notes?: string;
+			status?: string;
+		}) => {
+			return await apiRequest(`/pujas/${data.id}`, {
+				method: "PUT",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["puja-series"] });
+			toast({
+				title: "Puja series updated",
+				description: "Puja series has been updated successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to update puja series",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
 
-			if (params?.skills && params.skills.length > 0) {
-				queryParams.append("skills", params.skills.join(","));
-			}
+export function useDeletePujaSeries() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
 
-			if (params?.page) {
-				queryParams.append("page", params.page.toString());
-			}
-
-			if (params?.limit) {
-				queryParams.append("limit", params.limit.toString());
-			}
-
-			const queryString = queryParams.toString();
-			const endpoint = `/volunteers${queryString ? `?${queryString}` : ""}`;
-
-			const response = await apiRequest(endpoint);
-			return response;
+	return useMutation({
+		mutationFn: async (pujaId: string) => {
+			return await apiRequest(`/pujas/${pujaId}`, {
+				method: "DELETE",
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["puja-series"] });
+			toast({
+				title: "Puja series deleted",
+				description: "Puja series has been deleted successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to delete puja series",
+				description: error.message,
+				variant: "destructive",
+			});
 		},
 	});
 }
@@ -1054,10 +1125,84 @@ export function useCommunicationTemplates(params?: {
 			}
 
 			const queryString = queryParams.toString();
-			const endpoint = `/templates${queryString ? `?${queryString}` : ""}`;
+			const endpoint = `/communications/templates${
+				queryString ? `?${queryString}` : ""
+			}`;
 
 			const response = await apiRequest(endpoint);
 			return response;
+		},
+	});
+}
+
+export function useCreateCommunicationTemplate() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			name: string;
+			description?: string;
+			category: string;
+			subject: string;
+			content: string;
+			variables?: string[];
+		}) => {
+			return await apiRequest("/communications/templates", {
+				method: "POST",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["templates"] });
+			toast({
+				title: "Template created",
+				description: "Email template has been created successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to create template",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+export function useUpdateCommunicationTemplate() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			id: string;
+			name?: string;
+			description?: string;
+			category?: string;
+			subject?: string;
+			content?: string;
+			variables?: string[];
+			is_active?: boolean;
+		}) => {
+			return await apiRequest(`/communications/templates/${data.id}`, {
+				method: "PUT",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["templates"] });
+			toast({
+				title: "Template updated",
+				description: "Email template has been updated successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to update template",
+				description: error.message,
+				variant: "destructive",
+			});
 		},
 	});
 }
@@ -1211,6 +1356,934 @@ export function useActivityTimeline(
 			];
 
 			return mockActivities;
+		},
+	});
+}
+// ================================================
+// VOLUNTEER SYSTEM HOOKS
+// ================================================
+
+export interface Volunteer {
+	id: string;
+	community_id: string;
+	first_name: string;
+	last_name: string;
+	email: string;
+	phone?: string;
+	date_of_birth?: string;
+	address?: any;
+	emergency_contact?: any;
+	skills: string[];
+	interests: string[];
+	availability?: any;
+	background_check_status: string;
+	background_check_date?: string;
+	onboarding_completed: boolean;
+	onboarding_date?: string;
+	status: string;
+	total_hours_volunteered: number;
+	rating?: number;
+	notes?: string;
+	preferences?: any;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface VolunteerApplication {
+	id: string;
+	community_id: string;
+	first_name: string;
+	last_name: string;
+	email: string;
+	phone?: string;
+	date_of_birth?: string;
+	address?: any;
+	emergency_contact?: any;
+	skills: string[];
+	interests: string[];
+	availability?: any;
+	motivation?: string;
+	experience?: string;
+	references?: any[];
+	status: string;
+	applied_at: string;
+	reviewed_at?: string;
+	reviewed_by?: string;
+	review_notes?: string;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface VolunteerShift {
+	id: string;
+	community_id: string;
+	title: string;
+	description?: string;
+	location?: string;
+	shift_date: string;
+	start_time: string;
+	end_time: string;
+	required_volunteers: number;
+	skills_required: string[];
+	status: string;
+	created_by?: string;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface VolunteerAttendance {
+	id: string;
+	shift_assignment_id: string;
+	volunteer_id: string;
+	shift_id: string;
+	check_in_time?: string;
+	check_out_time?: string;
+	hours_worked: number;
+	status: string;
+	notes?: string;
+	checked_in_by?: string;
+	checked_out_by?: string;
+	created_at: string;
+	updated_at: string;
+	volunteers?: any;
+	volunteer_shifts?: any;
+}
+
+export interface EmailCommunication {
+	id: string;
+	community_id?: string;
+	sender_email: string;
+	recipient_emails: string[];
+	subject: string;
+	content: string;
+	template_id?: string;
+	status: string;
+	scheduled_at?: string;
+	sent_at?: string;
+	delivery_status?: any;
+	open_tracking?: any;
+	click_tracking?: any;
+	created_by?: string;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface EmailTemplate {
+	id: string;
+	community_id?: string;
+	name: string;
+	subject: string;
+	content: string;
+	variables?: any[];
+	category: string;
+	is_active: boolean;
+	created_by?: string;
+	usage_count: number;
+	created_at: string;
+	updated_at: string;
+}
+
+// ================================================
+// VOLUNTEERS HOOKS
+// ================================================
+
+export function useVolunteers(params?: {
+	community_id?: string;
+	status?: string;
+	skills?: string;
+	page?: number;
+	limit?: number;
+}) {
+	return useQuery({
+		queryKey: ["volunteers", params],
+		queryFn: async () => {
+			const queryParams = new URLSearchParams();
+
+			if (params?.community_id && params.community_id !== "all") {
+				queryParams.append("community_id", params.community_id);
+			}
+
+			if (params?.status && params.status !== "all") {
+				queryParams.append("status", params.status);
+			}
+
+			if (params?.skills) {
+				queryParams.append("skills", params.skills);
+			}
+
+			if (params?.page) {
+				queryParams.append("page", params.page.toString());
+			}
+
+			if (params?.limit) {
+				queryParams.append("limit", params.limit.toString());
+			}
+
+			const queryString = queryParams.toString();
+			const endpoint = `/volunteers${queryString ? `?${queryString}` : ""}`;
+
+			const response = await apiRequest(endpoint);
+			return response;
+		},
+	});
+}
+
+export function useCreateVolunteer() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			community_id: string;
+			first_name: string;
+			last_name: string;
+			email: string;
+			phone?: string;
+			date_of_birth?: string;
+			address?: any;
+			emergency_contact?: any;
+			skills?: string[];
+			interests?: string[];
+			availability?: any;
+			notes?: string;
+		}) => {
+			return await apiRequest("/volunteers", {
+				method: "POST",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["volunteers"] });
+			toast({
+				title: "Volunteer created",
+				description: "Volunteer has been created successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to create volunteer",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+export function useUpdateVolunteer() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			id: string;
+			first_name?: string;
+			last_name?: string;
+			email?: string;
+			phone?: string;
+			skills?: string[];
+			interests?: string[];
+			availability?: any;
+			status?: string;
+			notes?: string;
+		}) => {
+			return await apiRequest(`/volunteers/${data.id}`, {
+				method: "PUT",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["volunteers"] });
+			toast({
+				title: "Volunteer updated",
+				description: "Volunteer has been updated successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to update volunteer",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+// ================================================
+// VOLUNTEER APPLICATIONS HOOKS
+// ================================================
+
+export function useVolunteerApplications(params?: {
+	community_id?: string;
+	status?: string;
+	page?: number;
+	limit?: number;
+}) {
+	return useQuery({
+		queryKey: ["volunteer-applications", params],
+		queryFn: async () => {
+			const queryParams = new URLSearchParams();
+
+			if (params?.community_id && params.community_id !== "all") {
+				queryParams.append("community_id", params.community_id);
+			}
+
+			if (params?.status && params.status !== "all") {
+				queryParams.append("status", params.status);
+			}
+
+			if (params?.page) {
+				queryParams.append("page", params.page.toString());
+			}
+
+			if (params?.limit) {
+				queryParams.append("limit", params.limit.toString());
+			}
+
+			const queryString = queryParams.toString();
+			const endpoint = `/volunteers/applications${
+				queryString ? `?${queryString}` : ""
+			}`;
+
+			const response = await apiRequest(endpoint);
+			return response;
+		},
+	});
+}
+
+export function useCreateVolunteerApplication() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			community_id: string;
+			first_name: string;
+			last_name: string;
+			email: string;
+			phone?: string;
+			date_of_birth?: string;
+			address?: any;
+			emergency_contact?: any;
+			skills?: string[];
+			interests?: string[];
+			availability?: any;
+			motivation?: string;
+			experience?: string;
+			references?: any[];
+		}) => {
+			return await apiRequest("/volunteers/applications", {
+				method: "POST",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["volunteer-applications"] });
+			toast({
+				title: "Application submitted",
+				description:
+					"Your volunteer application has been submitted successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to submit application",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+export function useReviewVolunteerApplication() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			id: string;
+			status: string;
+			review_notes?: string;
+		}) => {
+			return await apiRequest(`/volunteers/applications/${data.id}/review`, {
+				method: "PUT",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: (data, variables) => {
+			queryClient.invalidateQueries({ queryKey: ["volunteer-applications"] });
+			queryClient.invalidateQueries({ queryKey: ["volunteers"] });
+			toast({
+				title: `Application ${variables.status}`,
+				description: `Volunteer application has been ${variables.status} successfully.`,
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to review application",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+export function useApproveVolunteerApplication() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			id: string;
+			reviewed_by?: string;
+			notes?: string;
+		}) => {
+			return await apiRequest(`/volunteers/applications/${data.id}/approve`, {
+				method: "PUT",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["volunteer-applications"] });
+			queryClient.invalidateQueries({ queryKey: ["volunteers"] });
+			toast({
+				title: "Application approved",
+				description: "Volunteer application has been approved successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to approve application",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+export function useRejectVolunteerApplication() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			id: string;
+			reviewed_by?: string;
+			rejection_reason?: string;
+			notes?: string;
+		}) => {
+			return await apiRequest(`/volunteers/applications/${data.id}/reject`, {
+				method: "PUT",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["volunteer-applications"] });
+			toast({
+				title: "Application rejected",
+				description: "Volunteer application has been rejected.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to reject application",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+// ================================================
+// VOLUNTEER SHIFTS HOOKS
+// ================================================
+
+export function useVolunteerShifts(params?: {
+	community_id?: string;
+	status?: string;
+	date?: string;
+	page?: number;
+	limit?: number;
+}) {
+	return useQuery({
+		queryKey: ["volunteer-shifts", params],
+		queryFn: async () => {
+			const queryParams = new URLSearchParams();
+
+			if (params?.community_id && params.community_id !== "all") {
+				queryParams.append("community_id", params.community_id);
+			}
+
+			if (params?.status && params.status !== "all") {
+				queryParams.append("status", params.status);
+			}
+
+			if (params?.date) {
+				queryParams.append("date", params.date);
+			}
+
+			if (params?.page) {
+				queryParams.append("page", params.page.toString());
+			}
+
+			if (params?.limit) {
+				queryParams.append("limit", params.limit.toString());
+			}
+
+			const queryString = queryParams.toString();
+			const endpoint = `/volunteers/shifts${
+				queryString ? `?${queryString}` : ""
+			}`;
+
+			const response = await apiRequest(endpoint);
+			return response;
+		},
+	});
+}
+
+export function useCreateVolunteerShift() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			community_id: string;
+			title: string;
+			description?: string;
+			location?: string;
+			shift_date: string;
+			start_time: string;
+			end_time: string;
+			required_volunteers?: number;
+			skills_required?: string[];
+		}) => {
+			return await apiRequest("/volunteers/shifts", {
+				method: "POST",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["volunteer-shifts"] });
+			toast({
+				title: "Shift created",
+				description: "Volunteer shift has been created successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to create shift",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+// ================================================
+// VOLUNTEER ATTENDANCE HOOKS
+// ================================================
+
+export function useVolunteerAttendance(params?: {
+	volunteer_id?: string;
+	shift_id?: string;
+	date?: string;
+	page?: number;
+	limit?: number;
+}) {
+	return useQuery({
+		queryKey: ["volunteer-attendance", params],
+		queryFn: async () => {
+			const queryParams = new URLSearchParams();
+
+			if (params?.volunteer_id) {
+				queryParams.append("volunteer_id", params.volunteer_id);
+			}
+
+			if (params?.shift_id) {
+				queryParams.append("shift_id", params.shift_id);
+			}
+
+			if (params?.date) {
+				queryParams.append("date", params.date);
+			}
+
+			if (params?.page) {
+				queryParams.append("page", params.page.toString());
+			}
+
+			if (params?.limit) {
+				queryParams.append("limit", params.limit.toString());
+			}
+
+			const queryString = queryParams.toString();
+			const endpoint = `/volunteers/attendance${
+				queryString ? `?${queryString}` : ""
+			}`;
+
+			const response = await apiRequest(endpoint);
+			return response;
+		},
+	});
+}
+
+export function useCheckInVolunteer() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			shift_assignment_id: string;
+			volunteer_id: string;
+			shift_id: string;
+		}) => {
+			return await apiRequest("/volunteers/attendance/checkin", {
+				method: "POST",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["volunteer-attendance"] });
+			toast({
+				title: "Check-in successful",
+				description: "Volunteer has been checked in successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to check in",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+export function useCheckOutVolunteer() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (attendanceId: string) => {
+			return await apiRequest(
+				`/volunteers/attendance/${attendanceId}/checkout`,
+				{
+					method: "PUT",
+				}
+			);
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["volunteer-attendance"] });
+			queryClient.invalidateQueries({ queryKey: ["volunteers"] });
+			toast({
+				title: "Check-out successful",
+				description: "Volunteer has been checked out successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to check out",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+export function useCreateAttendance() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			volunteer_id: string;
+			shift_id: string;
+			status: string;
+			check_in_time?: string;
+			check_out_time?: string;
+			notes?: string;
+		}) => {
+			return await apiRequest("/volunteers/attendance", {
+				method: "POST",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["volunteer-attendance"] });
+			toast({
+				title: "Attendance recorded",
+				description: "Attendance has been recorded successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to record attendance",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+export function useUpdateAttendance() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			id: string;
+			status?: string;
+			check_in_time?: string;
+			check_out_time?: string;
+			notes?: string;
+		}) => {
+			return await apiRequest(`/volunteers/attendance/${data.id}`, {
+				method: "PUT",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["volunteer-attendance"] });
+			toast({
+				title: "Attendance updated",
+				description: "Attendance has been updated successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to update attendance",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+// ================================================
+// EMAIL COMMUNICATIONS HOOKS
+// ================================================
+
+export function useEmailCommunications(params?: {
+	community_id?: string;
+	status?: string;
+	page?: number;
+	limit?: number;
+}) {
+	return useQuery({
+		queryKey: ["email-communications", params],
+		queryFn: async () => {
+			const queryParams = new URLSearchParams();
+
+			if (params?.community_id && params.community_id !== "all") {
+				queryParams.append("community_id", params.community_id);
+			}
+
+			if (params?.status && params.status !== "all") {
+				queryParams.append("status", params.status);
+			}
+
+			if (params?.page) {
+				queryParams.append("page", params.page.toString());
+			}
+
+			if (params?.limit) {
+				queryParams.append("limit", params.limit.toString());
+			}
+
+			const queryString = queryParams.toString();
+			const endpoint = `/communications/emails${
+				queryString ? `?${queryString}` : ""
+			}`;
+
+			const response = await apiRequest(endpoint);
+			return response;
+		},
+	});
+}
+
+export function useSendEmail() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			community_id?: string;
+			sender_email: string;
+			recipient_emails: string[];
+			subject: string;
+			content: string;
+			template_id?: string;
+			scheduled_at?: string;
+		}) => {
+			return await apiRequest("/communications/emails/send", {
+				method: "POST",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["email-communications"] });
+			toast({
+				title: "Email sent",
+				description: "Email has been sent successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to send email",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+export function useSendBulkEmailToVolunteers() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			community_id?: string;
+			sender_email: string;
+			volunteer_filter?: any;
+			subject: string;
+			content: string;
+			template_id?: string;
+		}) => {
+			return await apiRequest("/communications/emails/send-to-volunteers", {
+				method: "POST",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: (data) => {
+			queryClient.invalidateQueries({ queryKey: ["email-communications"] });
+			toast({
+				title: "Bulk email sent",
+				description: data.message || "Bulk email has been sent successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to send bulk email",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+// ================================================
+// EMAIL TEMPLATES HOOKS
+// ================================================
+
+export function useEmailTemplates(params?: {
+	community_id?: string;
+	category?: string;
+	is_active?: boolean;
+	page?: number;
+	limit?: number;
+}) {
+	return useQuery({
+		queryKey: ["email-templates", params],
+		queryFn: async () => {
+			const queryParams = new URLSearchParams();
+
+			if (params?.community_id && params.community_id !== "all") {
+				queryParams.append("community_id", params.community_id);
+			}
+
+			if (params?.category && params.category !== "all") {
+				queryParams.append("category", params.category);
+			}
+
+			if (params?.is_active !== undefined) {
+				queryParams.append("is_active", params.is_active.toString());
+			}
+
+			if (params?.page) {
+				queryParams.append("page", params.page.toString());
+			}
+
+			if (params?.limit) {
+				queryParams.append("limit", params.limit.toString());
+			}
+
+			const queryString = queryParams.toString();
+			const endpoint = `/communications/templates${
+				queryString ? `?${queryString}` : ""
+			}`;
+
+			const response = await apiRequest(endpoint);
+			return response;
+		},
+	});
+}
+
+export function useCreateEmailTemplate() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			community_id?: string;
+			name: string;
+			subject: string;
+			content: string;
+			variables?: any[];
+			category?: string;
+		}) => {
+			return await apiRequest("/communications/templates", {
+				method: "POST",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["email-templates"] });
+			toast({
+				title: "Template created",
+				description: "Email template has been created successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to create template",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+export function useUpdateEmailTemplate() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			id: string;
+			name?: string;
+			subject?: string;
+			content?: string;
+			variables?: any[];
+			category?: string;
+			is_active?: boolean;
+		}) => {
+			return await apiRequest(`/communications/templates/${data.id}`, {
+				method: "PUT",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["email-templates"] });
+			toast({
+				title: "Template updated",
+				description: "Email template has been updated successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to update template",
+				description: error.message,
+				variant: "destructive",
+			});
 		},
 	});
 }

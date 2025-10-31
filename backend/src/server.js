@@ -18,11 +18,12 @@ const donationRoutes = require('./routes/donations');
 const expenseRoutes = require('./routes/expenses');
 const eventRoutes = require('./routes/events');
 const taskRoutes = require('./routes/tasks');
-const volunteerRoutes = require('./routes/volunteers');
+const volunteerRoutes = require('./routes/volunteers-simple');
 const broadcastRoutes = require('./routes/broadcasts');
 const templateRoutes = require('./routes/templates');
 const pujaRoutes = require('./routes/pujas');
 const budgetRequestRoutes = require('./routes/budgetRequests');
+const communicationRoutes = require('./routes/communications');
 
 // Import Supabase-backed models
 require('./models/User');
@@ -86,6 +87,7 @@ app.use('/api/broadcasts', broadcastRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/pujas', pujaRoutes);
 app.use('/api/budget-requests', budgetRequestRoutes);
+app.use('/api/communications', communicationRoutes);
 
 // Temporary schema check endpoint (remove in production)
 // app.use('/api/debug', require('../check-schema-endpoint'));

@@ -1,0 +1,140 @@
+{
+  "info": {
+    "name": "Volunteer Applications API",
+    "description": "API endpoints for managing volunteer applications",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Submit New Application",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"first_name\": \"Sarah\",\n  \"last_name\": \"Johnson\",\n  \"email\": \"sarah.johnson@email.com\",\n  \"phone\": \"+1 555-123-4567\",\n  \"skills\": [\"Photography\", \"Social Media\", \"Graphic Design\"],\n  \"interests\": [\"Marketing\", \"Documentation\", \"Event Photography\"],\n  \"motivation\": \"I want to help document and promote temple events through my photography skills.\",\n  \"experience\": \"Professional photographer with 3 years experience in event photography\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5000/api/volunteers/applications",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5000",
+          "path": ["api", "volunteers", "applications"]
+        }
+      }
+    },
+    {
+      "name": "Get All Applications",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:5000/api/volunteers/applications",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5000",
+          "path": ["api", "volunteers", "applications"]
+        }
+      }
+    },
+    {
+      "name": "Get Pending Applications",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:5000/api/volunteers/applications?status=pending",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5000",
+          "path": ["api", "volunteers", "applications"],
+          "query": [
+            {
+              "key": "status",
+              "value": "pending"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Approve Application",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"notes\": \"Application approved after review\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5000/api/volunteers/applications/{{APPLICATION_ID}}/approve",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5000",
+          "path": ["api", "volunteers", "applications", "{{APPLICATION_ID}}", "approve"]
+        }
+      }
+    },
+    {
+      "name": "Reject Application",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rejection_reason\": \"Does not meet experience requirements\",\n  \"notes\": \"Applicant needs more relevant experience\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5000/api/volunteers/applications/{{APPLICATION_ID}}/reject",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5000",
+          "path": ["api", "volunteers", "applications", "{{APPLICATION_ID}}", "reject"]
+        }
+      }
+    },
+    {
+      "name": "Update Application Status",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"under-review\",\n  \"notes\": \"Application is being reviewed by the committee\",\n  \"background_check\": \"completed\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5000/api/volunteers/applications/{{APPLICATION_ID}}/status",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5000",
+          "path": ["api", "volunteers", "applications", "{{APPLICATION_ID}}", "status"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "APPLICATION_ID",
+      "value": "5191aaea-482d-49d5-9ca6-53d6a1fad433",
+      "description": "Replace with actual application ID"
+    }
+  ]
+}

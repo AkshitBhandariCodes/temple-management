@@ -25,6 +25,8 @@ const pujaRoutes = require('./routes/pujas');
 const financeRoutes = require('./routes/finance');
 const budgetRequestRoutes = require('./routes/budgetRequests');
 const communicationRoutes = require('./routes/communications');
+const donationsRoutes = require('./routes/donations');
+const expensesRoutes = require('./routes/expenses');
 
 // Import Supabase-backed models
 require('./models/User');
@@ -90,6 +92,8 @@ app.use('/api/pujas', pujaRoutes);
 app.use('/api/finance', financeRoutes);
 app.use('/api/budget-requests', budgetRequestRoutes);
 app.use('/api/communications', communicationRoutes);
+app.use('/api/donations', donationsRoutes);
+app.use('/api/expenses', expensesRoutes);
 
 // Temporary schema check endpoint (remove in production)
 // app.use('/api/debug', require('../check-schema-endpoint'));

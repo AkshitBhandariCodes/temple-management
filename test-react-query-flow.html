@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>React Query Flow Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        .step { margin: 10px 0; padding: 10px; background: #f8f9fa; border-left: 4px solid #007bff; }
+    </style>
+</head>
+<body>
+    <h1>🔍 React Query Flow Test for Finance</h1>
+    
+    <div class="section info">
+        <h2>Test Scenario</h2>
+        <p>This test simulates the exact flow that happens in the React frontend:</p>
+        <div class="step">1. Fetch initial data (categories, transactions, summary)</div>
+        <div class="step">2. Create a new donation transaction</div>
+        <div class="step">3. Verify data is updated after creation</div>
+        <div class="step">4. Check if totals are recalculated correctly</div>
+    </div>
+
+    <div class="section">
+        <h2>Test Controls</h2>
+        <button onclick="runFullTest()">🚀 Run Full Test</button>
+        <button onclick="clearResults()">🧹 Clear Results</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        let initialData = {};
+        
+        function log(title, data, type = 'info') {
+            const results = document.getElementById('results');
+            const section = document.createElement('div');
+            section.className = `section ${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            section.innerHTML = `
+                <h3>${title} - ${timestamp}</h3>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+            
+            results.appendChild(section);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function apiCall(endpoint, options = {}) {
+            const response = await fetch(`${API_BASE}${endpoint}`, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                },
+                ...options
+            });
+            
+            const data = await response.json();
+            return { status: response.status, data };
+        }
+
+        async function runFullTest() {
+            clearResults();
+            log('🚀 Starting React Query Flow Test', { 
+                timestamp: new Date().toISOString(),
+                scenario: 'Simulating frontend donation creation'
+            }, 'info');
+            
+            try {
+                // Step 1: Fetch initial data (like React Query would)
+                log('📊 Step 1: Fetching initial data...', {}, 'info');
+                
+                const [categoriesResult, transactionsResult, summaryResult] = await Promise.all([
+                    apiCall('/finance/categories'),
+                    apiCall('/finance/transactions'),
+                    apiCall('/finance/summary')
+                ]);
+                
+                if (categoriesResult.status === 200 && transactionsResult.status === 200 && summaryResult.status === 200) {
+                    initialData = {
+                        categories: categoriesResult.data.data,
+                        transactions: transactionsResult.data.data,
+                        summary: summaryResult.data.data
+                    };
+                    
+                    log('✅ Initial data fetched successfully', {
+                        categoriesCount: initialData.categories.length,
+                        transactionsCount: initialData.transactions.length,
+                        initialIncome: initialData.summary.totalIncome,
+                        initialExpenses: initialData.summary.totalExpenses,
+                        initialNet: initialData.summary.netAmount
+                    }, 'success');
+                } else {
+                    throw new Error('Failed to fetch initial data');
+                }
+                
+                // Step 2: Create donation (like frontend form would)
+                log('💰 Step 2: Creating donation transaction...', {}, 'info');
+                
+                const donationCategory = initialData.categories.find(cat => 
+                    cat.category_type === 'income' && cat.name.toLowerCase().includes('donation')
+                );
+                
+                const donationData = {
+                    type: 'income',
+                    amount: 3333,
+                    description: 'React Query Test Donation',
+                    category_id: donationCategory?.id || null,
+                    payment_method: 'upi',
+                    date: new Date().toISOString().split('T')[0]
+                };
+                
+                log('📝 Donation data to be sent', donationData, 'info');
+                
+                const createResult = await apiCall('/finance/transactions', {
+                    method: 'POST',
+                    body: JSON.stringify(donationData)
+                });
+                
+                if (createResult.status === 201 && createResult.data.success) {
+                    log('✅ Donation created successfully', {
+                        transactionId: createResult.data.data.id,
+                        amount: createResult.data.data.amount,
+                        type: createResult.data.data.type,
+                        description: createResult.data.data.description
+                    }, 'success');
+                } else {
+                    throw new Error(`Failed to create donation: ${JSON.stringify(createResult.data)}`);
+                }
+                
+                // Step 3: Refetch data (like React Query invalidation would)
+                log('🔄 Step 3: Refetching data (simulating React Query invalidation)...', {}, 'info');
+                
+                // Wait a moment to ensure database is updated
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                const [newCategoriesResult, newTransactionsResult, newSummaryResult] = await Promise.all([
+                    apiCall('/finance/categories'),
+                    apiCall('/finance/transactions'),
+                    apiCall('/finance/summary')
+                ]);
+                
+                if (newCategoriesResult.status === 200 && newTransactionsResult.status === 200 && newSummaryResult.status === 200) {
+                    const newData = {
+                        categories: newCategoriesResult.data.data,
+                        transactions: newTransactionsResult.data.data,
+                        summary: newSummaryResult.data.data
+                    };
+                    
+                    log('✅ Data refetched successfully', {
+                        categoriesCount: newData.categories.length,
+                        transactionsCount: newData.transactions.length,
+                        newIncome: newData.summary.totalIncome,
+                        newExpenses: newData.summary.totalExpenses,
+                        newNet: newData.summary.netAmount
+                    }, 'success');
+                    
+                    // Step 4: Verify changes
+                    log('🔍 Step 4: Verifying data changes...', {}, 'info');
+                    
+                    const changes = {
+                        transactionCountIncrease: newData.transactions.length - initialData.transactions.length,
+                        incomeIncrease: newData.summary.totalIncome - initialData.summary.totalIncome,
+                        netIncrease: newData.summary.netAmount - initialData.summary.netAmount,
+                        newTransactionFound: newData.transactions.some(t => t.description === 'React Query Test Donation')
+                    };
+                    
+                    log('📈 Data changes detected', changes, 'success');
+                    
+                    // Verify expected changes
+                    if (changes.transactionCountIncrease === 1 && 
+                        changes.incomeIncrease === 3333 && 
+                        changes.netIncrease === 3333 && 
+                        changes.newTransactionFound) {
+                        
+                        log('🎉 TEST PASSED! All changes verified correctly', {
+                            result: 'SUCCESS',
+                            message: 'React Query flow is working perfectly',
+                            expectedBehavior: 'Frontend should update automatically after donation creation'
+                        }, 'success');
+                    } else {
+                        log('❌ TEST FAILED! Data changes not as expected', {
+                            result: 'FAILURE',
+                            expected: { transactionIncrease: 1, incomeIncrease: 3333, netIncrease: 3333 },
+                            actual: changes
+                        }, 'error');
+                    }
+                } else {
+                    throw new Error('Failed to refetch data');
+                }
+                
+            } catch (error) {
+                log('💥 Test failed with error', {
+                    error: error.message,
+                    suggestion: 'Check if backend server is running and database is accessible'
+                }, 'error');
+            }
+        }
+
+        // Auto-run test on page load
+        window.onload = function() {
+            log('🔧 React Query Flow Test Tool Loaded', { 
+                purpose: 'Test the exact flow that happens in React frontend',
+                baseUrl: API_BASE
+            }, 'info');
+        };
+    </script>
+</body>
+</html>

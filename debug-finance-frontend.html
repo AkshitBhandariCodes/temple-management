@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finance API Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .loading { background-color: #d1ecf1; border-color: #bee5eb; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Finance API Debug Tool</h1>
+    
+    <div class="section">
+        <h2>API Endpoints Test</h2>
+        <button onclick="testCategories()">Test Categories</button>
+        <button onclick="testTransactions()">Test Transactions</button>
+        <button onclick="testSummary()">Test Summary</button>
+        <button onclick="testCreateTransaction()">Test Create Transaction</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        
+        function log(title, data, type = 'info') {
+            const results = document.getElementById('results');
+            const section = document.createElement('div');
+            section.className = `section ${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            section.innerHTML = `
+                <h3>${title} - ${timestamp}</h3>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+            
+            results.insertBefore(section, results.firstChild);
+        }
+
+        async function apiCall(endpoint, options = {}) {
+            try {
+                log(`🔄 Making request to ${endpoint}`, { endpoint, options }, 'loading');
+                
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    },
+                    ...options
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    log(`✅ Success: ${endpoint}`, { 
+                        status: response.status, 
+                        data: data 
+                    }, 'success');
+                } else {
+                    log(`❌ Error: ${endpoint}`, { 
+                        status: response.status, 
+                        error: data 
+                    }, 'error');
+                }
+                
+                return data;
+            } catch (error) {
+                log(`💥 Network Error: ${endpoint}`, { 
+                    error: error.message 
+                }, 'error');
+                throw error;
+            }
+        }
+
+        async function testCategories() {
+            await apiCall('/finance/categories');
+        }
+
+        async function testTransactions() {
+            await apiCall('/finance/transactions');
+        }
+
+        async function testSummary() {
+            await apiCall('/finance/summary');
+        }
+
+        async function testCreateTransaction() {
+            const testData = {
+                type: 'income',
+                amount: 250,
+                description: 'Test donation from debug tool',
+                payment_method: 'cash',
+                date: new Date().toISOString().split('T')[0]
+            };
+            
+            await apiCall('/finance/transactions', {
+                method: 'POST',
+                body: JSON.stringify(testData)
+            });
+        }
+
+        // Auto-test on page load
+        window.onload = function() {
+            log('🚀 Finance API Debug Tool Loaded', { 
+                baseUrl: API_BASE,
+                timestamp: new Date().toISOString()
+            }, 'success');
+            
+            // Test all endpoints automatically
+            setTimeout(() => {
+                testCategories();
+                setTimeout(() => testTransactions(), 500);
+                setTimeout(() => testSummary(), 1000);
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

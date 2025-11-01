@@ -27,6 +27,10 @@ import {
 	Calendar,
 	CreditCard,
 	Loader2,
+	IndianRupee,
+	Receipt,
+	Wallet,
+	PiggyBank,
 } from "lucide-react";
 import {
 	useBudgetCategories,
@@ -35,25 +39,104 @@ import {
 	useCreateTransaction,
 	useFinancialSummary,
 } from "@/hooks/use-complete-api";
+import { useToast } from "@/hooks/use-toast";
 
 const FinanceManagement = () => {
 	const [activeTab, setActiveTab] = useState("overview");
 	const [showTransactionModal, setShowTransactionModal] = useState(false);
 	const [showCategoryModal, setShowCategoryModal] = useState(false);
+	const [transactionType, setTransactionType] = useState<"income" | "expense">(
+		"income"
+	);
+	const { toast } = useToast();
 
-	// API hooks
-	const { data: categoriesData, isLoading: categoriesLoading } =
-		useBudgetCategories();
-	const { data: transactionsData, isLoading: transactionsLoading } =
-		useTransactions();
-	const { data: summaryData, isLoading: summaryLoading } =
-		useFinancialSummary();
+	// API hooks with enhanced error handling and debugging
+	const {
+		data: categoriesData,
+		isLoading: categoriesLoading,
+		error: categoriesError,
+		refetch: refetchCategories,
+	} = useBudgetCategories();
+	const {
+		data: transactionsData,
+		isLoading: transactionsLoading,
+		error: transactionsError,
+		refetch: refetchTransactions,
+	} = useTransactions();
+	const {
+		data: summaryData,
+		isLoading: summaryLoading,
+		error: summaryError,
+		refetch: refetchSummary,
+	} = useFinancialSummary();
 	const createCategoryMutation = useCreateBudgetCategory();
 	const createTransactionMutation = useCreateTransaction();
 
 	const categories = categoriesData?.data || [];
 	const transactions = transactionsData?.data || [];
 	const summary = summaryData?.data || {};
+
+	// Enhanced debugging and error tracking
+	React.useEffect(() => {
+		console.log("💰 FinanceManagement - Data Status:", {
+			categoriesLoading,
+			transactionsLoading,
+			summaryLoading,
+			categoriesError: categoriesError?.message,
+			transactionsError: transactionsError?.message,
+			summaryError: summaryError?.message,
+			categoriesCount: categories.length,
+			transactionsCount: transactions.length,
+			summaryData: summary,
+			rawCategoriesData: categoriesData,
+			rawTransactionsData: transactionsData,
+			rawSummaryData: summaryData,
+		});
+
+		// Log specific transaction data for debugging
+		if (transactions.length > 0) {
+			console.log(
+				"📋 Current transactions:",
+				transactions.map((t) => ({
+					id: t.id,
+					type: t.type,
+					amount: t.amount,
+					description: t.description,
+					date: t.date,
+				}))
+			);
+		}
+
+		// Log summary details
+		if (summary && Object.keys(summary).length > 0) {
+			console.log("📊 Current summary:", {
+				totalIncome: summary.totalIncome,
+				totalExpenses: summary.totalExpenses,
+				netAmount: summary.netAmount,
+				transactionCount: summary.transactionCount,
+			});
+		}
+	}, [
+		categoriesData,
+		transactionsData,
+		summaryData,
+		categoriesLoading,
+		transactionsLoading,
+		summaryLoading,
+		categoriesError,
+		transactionsError,
+		summaryError,
+		categories.length,
+		transactions.length,
+	]);
+
+	// Filter categories by type for better UX
+	const incomeCategories = categories.filter(
+		(cat: any) => cat.category_type === "income"
+	);
+	const expenseCategories = categories.filter(
+		(cat: any) => cat.category_type === "expense"
+	);
 
 	// Form states
 	const [transactionForm, setTransactionForm] = useState({
@@ -74,13 +157,62 @@ const FinanceManagement = () => {
 
 	const handleCreateTransaction = async () => {
 		try {
-			await createTransactionMutation.mutateAsync({
+			console.log("💳 Creating transaction with form data:", transactionForm);
+
+			// Enhanced validation
+			if (!transactionForm.amount || !transactionForm.description) {
+				console.error("❌ Validation failed - missing required fields:", {
+					amount: transactionForm.amount,
+					description: transactionForm.description,
+				});
+				toast({
+					title: "Validation Error",
+					description: "Please fill in amount and description",
+					variant: "destructive",
+				});
+				return;
+			}
+
+			// Validate amount is positive number
+			const amount = parseFloat(transactionForm.amount);
+			if (isNaN(amount) || amount <= 0) {
+				console.error(
+					"❌ Validation failed - invalid amount:",
+					transactionForm.amount
+				);
+				toast({
+					title: "Validation Error",
+					description: "Please enter a valid positive amount",
+					variant: "destructive",
+				});
+				return;
+			}
+
+			const transactionData = {
 				...transactionForm,
-				amount: parseFloat(transactionForm.amount),
-				budget_amount: transactionForm.budget_amount
-					? parseFloat(transactionForm.budget_amount)
-					: undefined,
+				amount: amount,
+				// Ensure category_id is null if empty string
+				category_id: transactionForm.category_id || null,
+			};
+
+			console.log("🚀 Sending transaction data to API:", transactionData);
+			console.log("🔍 Transaction validation:", {
+				type: transactionData.type,
+				amount: transactionData.amount,
+				description: transactionData.description?.length,
+				category_id: transactionData.category_id,
+				payment_method: transactionData.payment_method,
+				date: transactionData.date,
 			});
+
+			const result = await createTransactionMutation.mutateAsync(
+				transactionData
+			);
+			console.log("✅ Transaction creation result:", result);
+
+			// Don't show toast here - the mutation hook handles it
+			// Don't manually refetch - React Query invalidation handles it
+
 			setShowTransactionModal(false);
 			setTransactionForm({
 				type: "expense",
@@ -90,19 +222,50 @@ const FinanceManagement = () => {
 				payment_method: "cash",
 				date: new Date().toISOString().split("T")[0],
 			});
+
+			console.log("🔄 Transaction created, React Query will auto-refresh data");
 		} catch (error) {
-			console.error("Failed to create transaction:", error);
+			console.error("❌ Failed to create transaction:", error);
+			console.error("❌ Error details:", error.message);
+			console.error("❌ Full error object:", JSON.stringify(error, null, 2));
+			toast({
+				title: "Error",
+				description: `Failed to create transaction: ${error.message}`,
+				variant: "destructive",
+			});
 		}
 	};
 
 	const handleCreateCategory = async () => {
 		try {
-			await createCategoryMutation.mutateAsync({
+			console.log("🔄 Creating category:", categoryForm);
+
+			// Validate required fields
+			if (!categoryForm.name) {
+				toast({
+					title: "Validation Error",
+					description: "Please enter a category name",
+					variant: "destructive",
+				});
+				return;
+			}
+
+			const categoryData = {
 				...categoryForm,
 				budget_amount: categoryForm.budget_amount
 					? parseFloat(categoryForm.budget_amount)
 					: 0,
+			};
+
+			console.log("📝 Sending category data:", categoryData);
+
+			await createCategoryMutation.mutateAsync(categoryData);
+
+			toast({
+				title: "Success!",
+				description: "Budget category created successfully",
 			});
+
 			setShowCategoryModal(false);
 			setCategoryForm({
 				name: "",
@@ -111,8 +274,38 @@ const FinanceManagement = () => {
 				category_type: "expense",
 			});
 		} catch (error) {
-			console.error("Failed to create category:", error);
+			console.error("❌ Failed to create category:", error);
+			toast({
+				title: "Error",
+				description: "Failed to create category. Please try again.",
+				variant: "destructive",
+			});
 		}
+	};
+
+	// Quick action handlers for common transactions
+	const handleQuickDonation = () => {
+		setTransactionType("income");
+		setTransactionForm({
+			...transactionForm,
+			type: "income",
+			category_id:
+				incomeCategories.find((cat) =>
+					cat.name.toLowerCase().includes("donation")
+				)?.id || "",
+			description: "Donation received",
+		});
+		setShowTransactionModal(true);
+	};
+
+	const handleQuickExpense = () => {
+		setTransactionType("expense");
+		setTransactionForm({
+			...transactionForm,
+			type: "expense",
+			description: "",
+		});
+		setShowTransactionModal(true);
 	};
 
 	const formatCurrency = (amount: number) => {
@@ -133,74 +326,182 @@ const FinanceManagement = () => {
 	return (
 		<div className="space-y-6">
 			{/* Header */}
-			<div className="flex items-center justify-between">
+			<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
 				<div>
-					<h2 className="text-2xl font-bold">Finance Management</h2>
+					<h2 className="text-2xl font-bold flex items-center gap-2">
+						<IndianRupee className="w-6 h-6 text-green-600" />
+						Finance Management
+					</h2>
 					<p className="text-muted-foreground">
-						Track income, expenses, and budget
+						Track donations, expenses, and temple finances
 					</p>
+					{/* Debug Info */}
+					{(categoriesError || transactionsError || summaryError) && (
+						<div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
+							<p className="text-sm font-medium text-red-800">
+								⚠️ API Issues Detected:
+							</p>
+							{categoriesError && (
+								<p className="text-xs text-red-600">
+									Categories: {categoriesError.message}
+								</p>
+							)}
+							{transactionsError && (
+								<p className="text-xs text-red-600">
+									Transactions: {transactionsError.message}
+								</p>
+							)}
+							{summaryError && (
+								<p className="text-xs text-red-600">
+									Summary: {summaryError.message}
+								</p>
+							)}
+							<p className="text-xs text-red-500 mt-1">
+								Check console for detailed logs. Ensure backend is running on
+								port 5000.
+							</p>
+						</div>
+					)}
+					{!categoriesError && !transactionsError && !summaryError && (
+						<div className="mt-1 text-xs text-green-600">
+							✅ API Status: {categories.length} categories,{" "}
+							{transactions.length} transactions loaded
+						</div>
+					)}
 				</div>
-				<div className="flex items-center space-x-2">
+				<div className="flex flex-wrap items-center gap-2">
+					<Button
+						onClick={handleQuickDonation}
+						className="bg-green-600 hover:bg-green-700">
+						<PiggyBank className="w-4 h-4 mr-2" />
+						Add Donation
+					</Button>
+					<Button
+						onClick={handleQuickExpense}
+						variant="outline"
+						className="border-red-200 text-red-600 hover:bg-red-50">
+						<Receipt className="w-4 h-4 mr-2" />
+						Add Expense
+					</Button>
 					<Button onClick={() => setShowCategoryModal(true)} variant="outline">
 						<Plus className="w-4 h-4 mr-2" />
 						Add Category
 					</Button>
-					<Button onClick={() => setShowTransactionModal(true)}>
-						<Plus className="w-4 h-4 mr-2" />
-						Add Transaction
+					{/* Debug refresh button */}
+					<Button
+						onClick={async () => {
+							console.log("🔄 Manual refresh triggered");
+							await Promise.all([
+								refetchTransactions(),
+								refetchSummary(),
+								refetchCategories(),
+							]);
+							console.log("✅ Manual refresh completed");
+						}}
+						variant="outline"
+						size="sm"
+						className="text-xs">
+						🔄 Refresh
 					</Button>
 				</div>
 			</div>
 
-			{/* Summary Cards */}
-			<div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-				<Card>
+			{/* Enhanced Summary Cards */}
+			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+				<Card className="border-green-200 bg-green-50">
 					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="text-sm font-medium">Total Income</CardTitle>
-						<TrendingUp className="h-4 w-4 text-green-600" />
+						<CardTitle className="text-sm font-medium text-green-800">
+							Total Income
+						</CardTitle>
+						<div className="p-2 bg-green-100 rounded-full">
+							<TrendingUp className="h-4 w-4 text-green-600" />
+						</div>
 					</CardHeader>
 					<CardContent>
-						<div className="text-2xl font-bold text-green-600">
+						<div className="text-2xl font-bold text-green-700">
 							{formatCurrency(summary.totalIncome || 0)}
 						</div>
+						<p className="text-xs text-green-600 mt-1">
+							+{incomeCategories.length} income sources
+						</p>
 					</CardContent>
 				</Card>
 
-				<Card>
+				<Card className="border-red-200 bg-red-50">
 					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="text-sm font-medium">
+						<CardTitle className="text-sm font-medium text-red-800">
 							Total Expenses
 						</CardTitle>
-						<TrendingDown className="h-4 w-4 text-red-600" />
+						<div className="p-2 bg-red-100 rounded-full">
+							<TrendingDown className="h-4 w-4 text-red-600" />
+						</div>
 					</CardHeader>
 					<CardContent>
-						<div className="text-2xl font-bold text-red-600">
+						<div className="text-2xl font-bold text-red-700">
 							{formatCurrency(summary.totalExpenses || 0)}
 						</div>
+						<p className="text-xs text-red-600 mt-1">
+							{expenseCategories.length} expense categories
+						</p>
 					</CardContent>
 				</Card>
 
-				<Card>
+				<Card
+					className={`border-2 ${
+						(summary.netAmount || 0) >= 0
+							? "border-green-200 bg-green-50"
+							: "border-red-200 bg-red-50"
+					}`}>
 					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="text-sm font-medium">Net Amount</CardTitle>
-						<DollarSign className="h-4 w-4 text-blue-600" />
+						<CardTitle
+							className={`text-sm font-medium ${
+								(summary.netAmount || 0) >= 0
+									? "text-green-800"
+									: "text-red-800"
+							}`}>
+							Net Balance
+						</CardTitle>
+						<div
+							className={`p-2 rounded-full ${
+								(summary.netAmount || 0) >= 0 ? "bg-green-100" : "bg-red-100"
+							}`}>
+							<Wallet
+								className={`h-4 w-4 ${
+									(summary.netAmount || 0) >= 0
+										? "text-green-600"
+										: "text-red-600"
+								}`}
+							/>
+						</div>
 					</CardHeader>
 					<CardContent>
 						<div
 							className={`text-2xl font-bold ${
 								(summary.netAmount || 0) >= 0
-									? "text-green-600"
-									: "text-red-600"
+									? "text-green-700"
+									: "text-red-700"
 							}`}>
 							{formatCurrency(summary.netAmount || 0)}
 						</div>
+						<p
+							className={`text-xs mt-1 ${
+								(summary.netAmount || 0) >= 0
+									? "text-green-600"
+									: "text-red-600"
+							}`}>
+							{(summary.netAmount || 0) >= 0 ? "Positive balance" : "Deficit"}
+						</p>
 					</CardContent>
 				</Card>
 
-				<Card>
+				<Card className="border-blue-200 bg-blue-50">
 					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="text-sm font-medium">Transactions</CardTitle>
-						<CreditCard className="h-4 w-4 text-gray-600" />
+						<CardTitle className="text-sm font-medium text-blue-800">
+							Transactions
+						</CardTitle>
+						<div className="p-2 bg-blue-100 rounded-full">
+							<CreditCard className="h-4 w-4 text-blue-600" />
+						</div>
 					</CardHeader>
 					<CardContent>
 						<div className="text-2xl font-bold">
@@ -380,49 +681,84 @@ const FinanceManagement = () => {
 				</TabsContent>
 			</Tabs>
 
-			{/* Transaction Modal */}
+			{/* Enhanced Transaction Modal */}
 			<Dialog
 				open={showTransactionModal}
 				onOpenChange={setShowTransactionModal}>
-				<DialogContent>
+				<DialogContent className="max-w-md">
 					<DialogHeader>
-						<DialogTitle>Add New Transaction</DialogTitle>
+						<DialogTitle className="flex items-center gap-2">
+							{transactionForm.type === "income" ? (
+								<>
+									<PiggyBank className="w-5 h-5 text-green-600" />
+									Add Income
+								</>
+							) : (
+								<>
+									<Receipt className="w-5 h-5 text-red-600" />
+									Add Expense
+								</>
+							)}
+						</DialogTitle>
 					</DialogHeader>
 					<div className="space-y-4">
 						<div className="grid grid-cols-2 gap-4">
 							<div>
-								<Label>Type</Label>
+								<Label className="text-sm font-medium">
+									Transaction Type *
+								</Label>
 								<Select
 									value={transactionForm.type}
 									onValueChange={(value) =>
 										setTransactionForm({ ...transactionForm, type: value })
 									}>
-									<SelectTrigger>
+									<SelectTrigger
+										className={
+											transactionForm.type === "income"
+												? "border-green-200"
+												: "border-red-200"
+										}>
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>
-										<SelectItem value="income">Income</SelectItem>
-										<SelectItem value="expense">Expense</SelectItem>
+										<SelectItem value="income">
+											<div className="flex items-center gap-2">
+												<TrendingUp className="w-4 h-4 text-green-600" />
+												Income
+											</div>
+										</SelectItem>
+										<SelectItem value="expense">
+											<div className="flex items-center gap-2">
+												<TrendingDown className="w-4 h-4 text-red-600" />
+												Expense
+											</div>
+										</SelectItem>
 									</SelectContent>
 								</Select>
 							</div>
 							<div>
-								<Label>Amount</Label>
-								<Input
-									type="number"
-									value={transactionForm.amount}
-									onChange={(e) =>
-										setTransactionForm({
-											...transactionForm,
-											amount: e.target.value,
-										})
-									}
-									placeholder="0.00"
-								/>
+								<Label className="text-sm font-medium">Amount (₹) *</Label>
+								<div className="relative">
+									<IndianRupee className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+									<Input
+										type="number"
+										value={transactionForm.amount}
+										onChange={(e) =>
+											setTransactionForm({
+												...transactionForm,
+												amount: e.target.value,
+											})
+										}
+										placeholder="0.00"
+										className="pl-10"
+										min="0"
+										step="0.01"
+									/>
+								</div>
 							</div>
 						</div>
 						<div>
-							<Label>Description</Label>
+							<Label className="text-sm font-medium">Description *</Label>
 							<Input
 								value={transactionForm.description}
 								onChange={(e) =>
@@ -431,7 +767,11 @@ const FinanceManagement = () => {
 										description: e.target.value,
 									})
 								}
-								placeholder="Transaction description"
+								placeholder={
+									transactionForm.type === "income"
+										? "e.g., Donation from devotee"
+										: "e.g., Temple maintenance"
+								}
 							/>
 						</div>
 						<div className="grid grid-cols-2 gap-4">

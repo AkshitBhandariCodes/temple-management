@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend Integration Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        input, select { padding: 8px; margin: 5px; border: 1px solid #ccc; border-radius: 3px; }
+        .form-group { margin: 10px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Frontend Integration Test</h1>
+    
+    <div class="section info">
+        <h2>Test React Query Flow</h2>
+        <p>This simulates the exact frontend flow for creating donations</p>
+    </div>
+
+    <div class="section">
+        <h2>1. Test API Connectivity</h2>
+        <button onclick="testAPIs()">🔌 Test All APIs</button>
+        <div id="api-results"></div>
+    </div>
+
+    <div class="section">
+        <h2>2. Simulate Donation Creation</h2>
+        <div class="form-group">
+            <label>Amount (₹):</label>
+            <input type="number" id="amount" value="1500" min="1">
+        </div>
+        <div class="form-group">
+            <label>Description:</label>
+            <input type="text" id="description" value="Frontend Test Donation">
+        </div>
+        <div class="form-group">
+            <label>Payment Method:</label>
+            <select id="payment_method">
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="card">Card</option>
+            </select>
+        </div>
+        <button onclick="createDonation()">💰 Create Donation</button>
+        <div id="creation-results"></div>
+    </div>
+
+    <div class="section">
+        <h2>3. Verify Data Updates</h2>
+        <button onclick="verifyUpdates()">🔄 Check Data Updates</button>
+        <div id="verification-results"></div>
+    </div>
+
+    <div id="logs"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        let initialData = {};
+        
+        function log(title, data, type = 'info') {
+            const logs = document.getElementById('logs');
+            const section = document.createElement('div');
+            section.className = `section ${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            section.innerHTML = `
+                <h3>${title} - ${timestamp}</h3>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+            
+            logs.appendChild(section);
+        }
+
+        function updateSection(sectionId, content, type = 'info') {
+            const section = document.getElementById(sectionId);
+            section.innerHTML = `<div class="${type}">${content}</div>`;
+        }
+
+        async function apiCall(endpoint, options = {}) {
+            const response = await fetch(`${API_BASE}${endpoint}`, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                },
+                ...options
+            });
+            
+            const data = await response.json();
+            return { status: response.status, data, ok: response.ok };
+        }
+
+        async function testAPIs() {
+            updateSection('api-results', '🔄 Testing APIs...', 'info');
+            
+            try {
+                const endpoints = [
+                    '/finance/categories',
+                    '/finance/transactions',
+                    '/finance/summary'
+                ];
+                
+                const results = {};
+                let allWorking = true;
+                
+                for (const endpoint of endpoints) {
+                    const result = await apiCall(endpoint);
+                    results[endpoint] = result;
+                    
+                    if (!result.ok || !result.data.success) {
+                        allWorking = false;
+                    }
+                }
+                
+                if (allWorking) {
+                    updateSection('api-results', `
+                        ✅ All APIs Working!<br>
+                        📁 Categories: ${results['/finance/categories'].data.data.length}<br>
+                        💳 Transactions: ${results['/finance/transactions'].data.data.length}<br>
+                        📊 Summary: Available
+                    `, 'success');
+                    
+                    initialData = results;
+                } else {
+                    updateSection('api-results', '❌ Some APIs failed - check console', 'error');
+                }
+                
+                log('API Test Results', results, allWorking ? 'success' : 'error');
+                
+            } catch (error) {
+                updateSection('api-results', `❌ API Test Failed: ${error.message}`, 'error');
+                log('API Test Error', { error: error.message }, 'error');
+            }
+        }
+
+        async function createDonation() {
+            updateSection('creation-results', '🔄 Creating donation...', 'info');
+            
+            try {
+                const amount = parseFloat(document.getElementById('amount').value);
+                const description = document.getElementById('description').value;
+                const payment_method = document.getElementById('payment_method').value;
+                
+                if (!amount || amount <= 0) {
+                    throw new Error('Invalid amount');
+                }
+                
+                if (!description.trim()) {
+                    throw new Error('Description required');
+                }
+                
+                // Get category if available
+                let category_id = null;
+                if (initialData['/finance/categories']?.data?.success) {
+                    const categories = initialData['/finance/categories'].data.data;
+                    const incomeCategory = categories.find(cat => cat.category_type === 'income');
+                    if (incomeCategory) {
+                        category_id = incomeCategory.id;
+                    }
+                }
+                
+                const donationData = {
+                    type: 'income',
+                    amount: amount,
+                    description: description.trim(),
+                    payment_method: payment_method,
+                    date: new Date().toISOString().split('T')[0],
+                    category_id: category_id
+                };
+                
+                log('Creating Donation', donationData, 'info');
+                
+                const result = await apiCall('/finance/transactions', {
+                    method: 'POST',
+                    body: JSON.stringify(donationData)
+                });
+                
+                if (result.ok && result.data.success) {
+                    updateSection('creation-results', `
+                        ✅ Donation Created Successfully!<br>
+                        💰 Amount: ₹${amount}<br>
+                        📝 Description: ${description}<br>
+                        🆔 ID: ${result.data.data.id}
+                    `, 'success');
+                    
+                    log('Donation Created', result.data, 'success');
+                    
+                    // Auto-verify updates
+                    setTimeout(() => verifyUpdates(), 1000);
+                    
+                } else {
+                    throw new Error(result.data.message || 'Creation failed');
+                }
+                
+            } catch (error) {
+                updateSection('creation-results', `❌ Creation Failed: ${error.message}`, 'error');
+                log('Creation Error', { error: error.message }, 'error');
+            }
+        }
+
+        async function verifyUpdates() {
+            updateSection('verification-results', '🔄 Verifying updates...', 'info');
+            
+            try {
+                // Fetch fresh data
+                const [transactionsResult, summaryResult] = await Promise.all([
+                    apiCall('/finance/transactions'),
+                    apiCall('/finance/summary')
+                ]);
+                
+                if (transactionsResult.ok && summaryResult.ok) {
+                    const transactions = transactionsResult.data.data;
+                    const summary = summaryResult.data.data;
+                    
+                    // Find our test donation
+                    const testDonation = transactions.find(t => 
+                        t.description.includes('Frontend Test Donation')
+                    );
+                    
+                    const verification = {
+                        transactionCount: transactions.length,
+                        totalIncome: summary.totalIncome,
+                        totalExpenses: summary.totalExpenses,
+                        netAmount: summary.netAmount,
+                        testDonationFound: !!testDonation
+                    };
+                    
+                    updateSection('verification-results', `
+                        ✅ Data Updated Successfully!<br>
+                        💳 Total Transactions: ${verification.transactionCount}<br>
+                        💰 Total Income: ₹${verification.totalIncome?.toLocaleString()}<br>
+                        💸 Total Expenses: ₹${verification.totalExpenses?.toLocaleString()}<br>
+                        📊 Net Amount: ₹${verification.netAmount?.toLocaleString()}<br>
+                        🎯 Test Donation: ${verification.testDonationFound ? 'Found ✅' : 'Not Found ❌'}
+                    `, 'success');
+                    
+                    log('Verification Results', verification, 'success');
+                    
+                } else {
+                    throw new Error('Failed to fetch updated data');
+                }
+                
+            } catch (error) {
+                updateSection('verification-results', `❌ Verification Failed: ${error.message}`, 'error');
+                log('Verification Error', { error: error.message }, 'error');
+            }
+        }
+
+        // Auto-test on page load
+        window.onload = function() {
+            log('Frontend Integration Test Started', { 
+                baseUrl: API_BASE,
+                timestamp: new Date().toISOString()
+            }, 'info');
+            
+            // Auto-test APIs
+            setTimeout(() => testAPIs(), 1000);
+        };
+    </script>
+</body>
+</html>

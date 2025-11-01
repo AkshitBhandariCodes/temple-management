@@ -230,4 +230,110 @@ router.get('/summary', async (req, res) => {
     }
 });
 
+// GET category-wise report
+router.get('/reports/categories', async (req, res) => {
+    try {
+        console.log('📊 Fetching category-wise report...');
+
+        const { data: transactions, error } = await supabaseService.client
+            .from('transactions')
+            .select(`
+                *,
+                budget_categories (
+                    id,
+                    name,
+                    category_type
+                )
+            `);
+
+        if (error) throw error;
+
+        // Group by category
+        const categoryReport = {};
+        transactions.forEach(transaction => {
+            const categoryId = transaction.category_id || 'uncategorized';
+            const categoryName = transaction.budget_categories?.name || 'Uncategorized';
+
+            if (!categoryReport[categoryId]) {
+                categoryReport[categoryId] = {
+                    id: categoryId,
+                    name: categoryName,
+                    type: transaction.budget_categories?.category_type || 'other',
+                    totalAmount: 0,
+                    transactionCount: 0,
+                    transactions: []
+                };
+            }
+
+            categoryReport[categoryId].totalAmount += parseFloat(transaction.amount);
+            categoryReport[categoryId].transactionCount += 1;
+            categoryReport[categoryId].transactions.push(transaction);
+        });
+
+        res.json({
+            success: true,
+            data: Object.values(categoryReport)
+        });
+    } catch (error) {
+        console.error('Error fetching category report:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch category report',
+            error: error.message
+        });
+    }
+});
+
+// GET monthly report
+router.get('/reports/monthly', async (req, res) => {
+    try {
+        console.log('📊 Fetching monthly report...');
+
+        const { data: transactions, error } = await supabaseService.client
+            .from('transactions')
+            .select('*')
+            .order('date', { ascending: false });
+
+        if (error) throw error;
+
+        // Group by month
+        const monthlyReport = {};
+        transactions.forEach(transaction => {
+            const date = new Date(transaction.date);
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+            if (!monthlyReport[monthKey]) {
+                monthlyReport[monthKey] = {
+                    month: monthKey,
+                    income: 0,
+                    expenses: 0,
+                    net: 0,
+                    transactionCount: 0
+                };
+            }
+
+            const amount = parseFloat(transaction.amount);
+            if (transaction.type === 'income') {
+                monthlyReport[monthKey].income += amount;
+            } else {
+                monthlyReport[monthKey].expenses += amount;
+            }
+            monthlyReport[monthKey].net = monthlyReport[monthKey].income - monthlyReport[monthKey].expenses;
+            monthlyReport[monthKey].transactionCount += 1;
+        });
+
+        res.json({
+            success: true,
+            data: Object.values(monthlyReport).sort((a, b) => b.month.localeCompare(a.month))
+        });
+    } catch (error) {
+        console.error('Error fetching monthly report:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch monthly report',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;

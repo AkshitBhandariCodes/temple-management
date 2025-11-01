@@ -9,6 +9,7 @@ import { BudgetsTab } from "@/components/finance/BudgetsTab";
 import { ReportsTab } from "@/components/finance/ReportsTab";
 import { ReconciliationTab } from "@/components/finance/ReconciliationTab";
 import { BudgetRequestsTab } from "@/components/finance/BudgetRequestsTab";
+import { FinanceDebugPanel } from "@/components/debug/FinanceDebugPanel";
 
 export const Finance = () => {
 	const [activeTab, setActiveTab] = useState("dashboard");
@@ -19,7 +20,7 @@ export const Finance = () => {
 				<FinanceHeader />
 
 				<Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-					<TabsList className="grid w-full grid-cols-7">
+					<TabsList className="grid w-full grid-cols-8">
 						<TabsTrigger value="dashboard">Dashboard</TabsTrigger>
 						<TabsTrigger value="donations">Donations</TabsTrigger>
 						<TabsTrigger value="expenses">Expenses</TabsTrigger>
@@ -27,6 +28,7 @@ export const Finance = () => {
 						<TabsTrigger value="budget-requests">Budget Requests</TabsTrigger>
 						<TabsTrigger value="reports">Reports</TabsTrigger>
 						<TabsTrigger value="reconciliation">Reconciliation</TabsTrigger>
+						<TabsTrigger value="debug">🔍 Debug</TabsTrigger>
 					</TabsList>
 
 					<TabsContent value="dashboard" className="mt-6">
@@ -51,6 +53,10 @@ export const Finance = () => {
 
 					<TabsContent value="reconciliation" className="mt-6">
 						<ReconciliationTab />
+					</TabsContent>
+
+					<TabsContent value="debug" className="mt-6">
+						<FinanceDebugPanel />
 					</TabsContent>
 
 					<TabsContent value="budget-requests" className="mt-6">

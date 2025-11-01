@@ -4,15 +4,18 @@ import { DonationChart } from "./DonationChart";
 import { EventAttendanceChart } from "./EventAttendanceChart";
 import { DashboardHeader } from "./DashboardHeader";
 import { RecentActivities } from "./RecentActivities";
+import { RecentDonations } from "./RecentDonations";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-	useDonations,
-	useExpenses,
 	useEvents,
 	useCommunities,
 	useVolunteers,
 	useActivityTimeline,
 	useTasks,
+	useTransactions,
+	useFinancialSummary,
+	useDonationsTable,
+	useDonationsSummary,
 } from "@/hooks/use-complete-api";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { useMemo } from "react";
@@ -48,13 +51,15 @@ export const Dashboard = () => {
 		limit: 100,
 	});
 
-	const { data: donationsData, isLoading: donationsLoading } = useDonations({
-		limit: 1000,
-	});
-
-	const { data: expensesData, isLoading: expensesLoading } = useExpenses({
-		limit: 1000,
-	});
+	// Use dedicated donations table and finance API
+	const { data: donationsTableData, isLoading: donationsTableLoading } =
+		useDonationsTable();
+	const { data: donationsSummaryData, isLoading: donationsSummaryLoading } =
+		useDonationsSummary();
+	const { data: transactionsData, isLoading: transactionsLoading } =
+		useTransactions();
+	const { data: financialSummaryData, isLoading: summaryLoading } =
+		useFinancialSummary();
 
 	const { data: volunteersData, isLoading: volunteersLoading } = useVolunteers({
 		limit: 1000,
@@ -71,20 +76,26 @@ export const Dashboard = () => {
 		return new Intl.NumberFormat("en-IN").format(num);
 	};
 
-	// Calculate metrics from real database data (with fallbacks for failing APIs)
-	const totalDonations =
-		donationsData?.data?.reduce((sum, donation) => {
-			return (
-				sum + (Number(donation.net_amount) || Number(donation.amount) || 0)
-			);
-		}, 0) || 0;
+	// Calculate metrics from dedicated donations table and finance API
+	const donations = donationsTableData?.data || [];
+	const donationsSummary = donationsSummaryData?.data || {};
+	const transactions = transactionsData?.data || [];
+	const financialSummary = financialSummaryData?.data || {};
 
+	// Use donations table for donation metrics
+	const totalDonations = donationsSummary.totalAmount || 0;
+	const donationCount = donationsSummary.totalCount || 0;
+	const thisMonthDonations = donationsSummary.thisMonthAmount || 0;
+
+	// Use finance API for expenses
 	const totalExpenses =
-		expensesData?.data?.reduce((sum, expense) => {
-			return sum + (Number(expense.amount) || 0);
-		}, 0) || 0;
+		financialSummary.totalExpenses ||
+		transactions
+			.filter((t) => t.type === "expense")
+			.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
 	const netIncome = totalDonations - totalExpenses;
+	const expenseCount = transactions.filter((t) => t.type === "expense").length;
 
 	// Real data from working Supabase APIs
 	const totalEvents = upcomingEventsData?.data?.length || 0;
@@ -99,8 +110,9 @@ export const Dashboard = () => {
 
 	// Check if APIs are failing
 	const donationsAvailable =
-		!donationsLoading && donationsData?.success !== false;
-	const expensesAvailable = !expensesLoading && expensesData?.success !== false;
+		!donationsTableLoading && donationsTableData?.success !== false;
+	const financeAvailable =
+		!transactionsLoading && transactionsData?.success !== false;
 	const volunteersAvailable =
 		!volunteersLoading && volunteersData?.success !== false;
 
@@ -129,11 +141,11 @@ export const Dashboard = () => {
 					value={totalDonations > 0 ? formatCurrency(totalDonations) : "₹0"}
 					icon={<Heart className="h-5 w-5" />}
 					description={
-						donationsLoading
+						transactionsLoading
 							? "Loading..."
-							: donationsAvailable
-							? `${donationsData?.data?.length || 0} donations`
-							: "Donations API not available"
+							: financeAvailable
+							? `${donationCount} donations received`
+							: "Finance API not available"
 					}
 				/>
 				<StatsCard
@@ -183,11 +195,11 @@ export const Dashboard = () => {
 					value={totalExpenses > 0 ? formatCurrency(totalExpenses) : "₹0"}
 					icon={<DollarSign className="h-5 w-5" />}
 					description={
-						expensesLoading
+						transactionsLoading
 							? "Loading..."
-							: expensesAvailable
-							? `${expensesData?.data?.length || 0} expenses`
-							: "Expenses API not available"
+							: financeAvailable
+							? `${expenseCount} expense transactions`
+							: "Finance API not available"
 					}
 				/>
 			</div>
@@ -224,7 +236,7 @@ export const Dashboard = () => {
 									{formatCurrency(netIncome)}
 								</span>
 							</div>
-							{donationsLoading || expensesLoading ? (
+							{transactionsLoading || summaryLoading ? (
 								<div className="flex items-center justify-center py-4">
 									<Loader2 className="w-4 h-4 animate-spin mr-2" />
 									<span className="text-sm text-muted-foreground">
@@ -233,8 +245,13 @@ export const Dashboard = () => {
 								</div>
 							) : (
 								<div className="text-xs text-muted-foreground pt-2">
-									Based on {donationsData?.data?.length || 0} donations and{" "}
-									{expensesData?.data?.length || 0} expenses
+									Based on {donationCount} donations and {expenseCount} expenses
+									{financialSummary.transactionCount && (
+										<>
+											{" "}
+											• Total: {financialSummary.transactionCount} transactions
+										</>
+									)}
 								</div>
 							)}
 						</div>
@@ -286,6 +303,58 @@ export const Dashboard = () => {
 									{completedTasks} tasks completed, {pendingTasks} pending
 								</div>
 							)}
+						</div>
+					</CardContent>
+				</Card>
+			</div>
+
+			{/* Recent Donations Section */}
+			<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+				<RecentDonations limit={6} showAddButton={true} />
+				<Card>
+					<CardHeader>
+						<CardTitle className="flex items-center gap-2">
+							<Activity className="w-5 h-5" />
+							Donation Insights
+						</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<div className="space-y-4">
+							<div className="flex justify-between items-center">
+								<span className="text-sm font-medium">This Month</span>
+								<span className="text-lg font-bold text-green-600">
+									{formatCurrency(
+										transactions
+											.filter(
+												(t) =>
+													t.type === "income" &&
+													new Date(t.date).getMonth() === new Date().getMonth()
+											)
+											.reduce((sum, t) => sum + Number(t.amount), 0)
+									)}
+								</span>
+							</div>
+							<div className="flex justify-between items-center">
+								<span className="text-sm font-medium">Average Donation</span>
+								<span className="text-lg font-bold">
+									{donationCount > 0
+										? formatCurrency(totalDonations / donationCount)
+										: "₹0"}
+								</span>
+							</div>
+							<div className="flex justify-between items-center">
+								<span className="text-sm font-medium">Total Donors</span>
+								<span className="text-lg font-bold">{donationCount}</span>
+							</div>
+							<div className="flex justify-between items-center pt-2 border-t">
+								<span className="text-sm font-medium">Collection Rate</span>
+								<span className="text-lg font-bold text-blue-600">
+									{donationCount > 0
+										? Math.round((donationCount / 30) * 100) / 100
+										: 0}{" "}
+									per day
+								</span>
+							</div>
 						</div>
 					</CardContent>
 				</Card>

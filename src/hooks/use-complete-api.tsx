@@ -389,7 +389,8 @@ export function useCommunity(id: string) {
 // DONATIONS HOOKS
 // ================================================
 
-export function useDonations(params?: {
+// Legacy donations function - replaced by useDonationsTable
+export function useLegacyDonations(params?: {
 	status?: string;
 	source?: string;
 	start_date?: string;
@@ -440,53 +441,13 @@ export function useDonations(params?: {
 	});
 }
 
-export function useCreateDonation() {
-	const queryClient = useQueryClient();
-	const { toast } = useToast();
-
-	return useMutation({
-		mutationFn: async (data: {
-			receipt_number: string;
-			transaction_id: string;
-			gross_amount: number;
-			net_amount: number;
-			source: string;
-			provider: string;
-			payment_method: string;
-			donor_name?: string;
-			donor_email?: string;
-			donor_phone?: string;
-			community_id?: string;
-			event_id?: string;
-			notes?: string;
-		}) => {
-			return await apiRequest("/donations", {
-				method: "POST",
-				body: JSON.stringify(data),
-			});
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["donations"] });
-			toast({
-				title: "Donation recorded",
-				description: "Donation has been recorded successfully.",
-			});
-		},
-		onError: (error: any) => {
-			toast({
-				title: "Failed to record donation",
-				description: error.message,
-				variant: "destructive",
-			});
-		},
-	});
-}
+// Old useCreateDonation removed - using new donations table version below
 
 // ================================================
 // EXPENSES HOOKS
 // ================================================
 
-export function useExpenses(params?: {
+export function useExpensesWithFilters(params?: {
 	status?: string;
 	category?: string;
 	community_id?: string;
@@ -496,7 +457,7 @@ export function useExpenses(params?: {
 	limit?: number;
 }) {
 	return useQuery({
-		queryKey: ["expenses", params],
+		queryKey: ["expenses-filtered", params],
 		queryFn: async () => {
 			const queryParams = new URLSearchParams();
 
@@ -533,44 +494,6 @@ export function useExpenses(params?: {
 
 			const response = await apiRequest(endpoint);
 			return response;
-		},
-	});
-}
-
-export function useCreateExpense() {
-	const queryClient = useQueryClient();
-	const { toast } = useToast();
-
-	return useMutation({
-		mutationFn: async (data: {
-			description: string;
-			vendor_name: string;
-			receipt_number: string;
-			amount: number;
-			category: string;
-			expense_date: string;
-			community_id?: string;
-			event_id?: string;
-			notes?: string;
-		}) => {
-			return await apiRequest("/expenses", {
-				method: "POST",
-				body: JSON.stringify(data),
-			});
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["expenses"] });
-			toast({
-				title: "Expense created",
-				description: "Expense has been created successfully.",
-			});
-		},
-		onError: (error: any) => {
-			toast({
-				title: "Failed to create expense",
-				description: error.message,
-				variant: "destructive",
-			});
 		},
 	});
 }
@@ -1108,12 +1031,19 @@ export function useCreateTransaction() {
 				body: JSON.stringify(data),
 			});
 		},
-		onSuccess: () => {
+		onSuccess: (data, variables) => {
+			// Invalidate all related queries to refresh data
 			queryClient.invalidateQueries({ queryKey: ["transactions"] });
 			queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
+			queryClient.invalidateQueries({ queryKey: ["budget-categories"] });
+
+			console.log("🔄 React Query: Invalidated all finance queries");
+
 			toast({
-				title: "Transaction created",
-				description: "Transaction has been recorded successfully.",
+				title: "Success!",
+				description: `${
+					variables.type === "income" ? "Income" : "Expense"
+				} of ₹${variables.amount} recorded successfully`,
 			});
 		},
 		onError: (error: any) => {
@@ -1132,6 +1062,262 @@ export function useFinancialSummary() {
 		queryFn: async () => {
 			return await apiRequest("/finance/summary");
 		},
+	});
+}
+
+// ================================================
+// DONATIONS HOOKS (Dedicated Donations Table)
+// ================================================
+
+export function useDonationsTable() {
+	return useQuery({
+		queryKey: ["donations-table"],
+		queryFn: async () => {
+			return await apiRequest("/donations");
+		},
+	});
+}
+
+export function useCreateDonation() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			donor_name?: string;
+			donor_email?: string;
+			donor_phone?: string;
+			amount: number;
+			donation_type?: string;
+			payment_method?: string;
+			purpose?: string;
+			notes?: string;
+		}) => {
+			return await apiRequest("/donations", {
+				method: "POST",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: (data, variables) => {
+			// Invalidate all related queries to refresh data
+			queryClient.invalidateQueries({ queryKey: ["donations-table"] });
+			queryClient.invalidateQueries({ queryKey: ["donations-summary"] });
+			queryClient.invalidateQueries({ queryKey: ["donation-categories"] });
+
+			console.log("🔄 React Query: Invalidated all donations queries");
+
+			toast({
+				title: "Success!",
+				description: `Donation of ₹${variables.amount} recorded successfully`,
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to create donation",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+export function useDonationCategories() {
+	return useQuery({
+		queryKey: ["donation-categories"],
+		queryFn: async () => {
+			return await apiRequest("/donations/categories/all");
+		},
+	});
+}
+
+export function useDonationsSummary() {
+	return useQuery({
+		queryKey: ["donations-summary"],
+		queryFn: async () => {
+			return await apiRequest("/donations/reports/summary");
+		},
+	});
+}
+
+export function useDailyDonations() {
+	return useQuery({
+		queryKey: ["daily-donations"],
+		queryFn: async () => {
+			return await apiRequest("/donations/reports/daily");
+		},
+	});
+}
+
+export function useTopDonors() {
+	return useQuery({
+		queryKey: ["top-donors"],
+		queryFn: async () => {
+			return await apiRequest("/donations/reports/top-donors");
+		},
+	});
+}
+
+// ================================================
+// EXPENSES HOOKS (Dedicated Expenses Table)
+// ================================================
+
+export function useExpenses() {
+	return useQuery({
+		queryKey: ["expenses"],
+		queryFn: async () => {
+			return await apiRequest("/expenses");
+		},
+	});
+}
+
+export function useExpense(id: string) {
+	return useQuery({
+		queryKey: ["expense", id],
+		queryFn: async () => {
+			return await apiRequest(`/expenses/${id}`);
+		},
+		enabled: !!id,
+	});
+}
+
+export function useCreateExpense() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			vendor_name?: string;
+			vendor_contact?: string;
+			description: string;
+			amount: number;
+			expense_type?: string;
+			payment_method?: string;
+			expense_date?: string;
+			budget_category_id?: string;
+			notes?: string;
+		}) => {
+			return await apiRequest("/expenses", {
+				method: "POST",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: (data, variables) => {
+			// Invalidate all related queries to refresh data
+			queryClient.invalidateQueries({ queryKey: ["expenses"] });
+			queryClient.invalidateQueries({ queryKey: ["expenses-summary"] });
+			queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
+
+			console.log("🔄 React Query: Invalidated all expenses queries");
+
+			toast({
+				title: "Success!",
+				description: `Expense of ₹${variables.amount} recorded successfully`,
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to create expense",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+export function useUpdateExpense() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async ({ id, data }: { id: string; data: any }) => {
+			return await apiRequest(`/expenses/${id}`, {
+				method: "PUT",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: (data, variables) => {
+			queryClient.invalidateQueries({ queryKey: ["expenses"] });
+			queryClient.invalidateQueries({ queryKey: ["expense", variables.id] });
+			queryClient.invalidateQueries({ queryKey: ["expenses-summary"] });
+
+			toast({
+				title: "Success!",
+				description: "Expense updated successfully",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to update expense",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+export function useDeleteExpense() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (id: string) => {
+			return await apiRequest(`/expenses/${id}`, {
+				method: "DELETE",
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["expenses"] });
+			queryClient.invalidateQueries({ queryKey: ["expenses-summary"] });
+
+			toast({
+				title: "Success!",
+				description: "Expense deleted successfully",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to delete expense",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+export function useExpensesSummary() {
+	return useQuery({
+		queryKey: ["expenses-summary"],
+		queryFn: async () => {
+			return await apiRequest("/expenses/reports/summary");
+		},
+	});
+}
+
+export function useExpensesByCategory() {
+	return useQuery({
+		queryKey: ["expenses-by-category"],
+		queryFn: async () => {
+			return await apiRequest("/expenses/reports/by-category");
+		},
+	});
+}
+
+export function useMonthlyExpenses() {
+	return useQuery({
+		queryKey: ["monthly-expenses"],
+		queryFn: async () => {
+			return await apiRequest("/expenses/reports/monthly");
+		},
+	});
+}
+
+export function useExpenseAttachments(expenseId: string) {
+	return useQuery({
+		queryKey: ["expense-attachments", expenseId],
+		queryFn: async () => {
+			return await apiRequest(`/expenses/${expenseId}/attachments`);
+		},
+		enabled: !!expenseId,
 	});
 }
 

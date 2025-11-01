@@ -1,5 +1,5 @@
 // Main Server File - Supabase Backend
-require('dotenv').config(); // Load .env from parent directory
+require('dotenv').config({ path: require('path').join(__dirname, '../../.env') }); // Load .env from root directory
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -22,6 +22,7 @@ const volunteerRoutes = require('./routes/volunteers-simple');
 const broadcastRoutes = require('./routes/broadcasts');
 const templateRoutes = require('./routes/templates');
 const pujaRoutes = require('./routes/pujas');
+const financeRoutes = require('./routes/finance');
 const budgetRequestRoutes = require('./routes/budgetRequests');
 const communicationRoutes = require('./routes/communications');
 
@@ -86,6 +87,7 @@ app.use('/api/volunteers', volunteerRoutes);
 app.use('/api/broadcasts', broadcastRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/pujas', pujaRoutes);
+app.use('/api/finance', financeRoutes);
 app.use('/api/budget-requests', budgetRequestRoutes);
 app.use('/api/communications', communicationRoutes);
 

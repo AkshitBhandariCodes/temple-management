@@ -1020,6 +1020,106 @@ export function useDeletePujaSeries() {
 }
 
 // ================================================
+// FINANCE HOOKS
+// ================================================
+
+export function useBudgetCategories() {
+	return useQuery({
+		queryKey: ["budget-categories"],
+		queryFn: async () => {
+			return await apiRequest("/finance/categories");
+		},
+	});
+}
+
+export function useCreateBudgetCategory() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			name: string;
+			description?: string;
+			budget_amount?: number;
+			category_type: string;
+		}) => {
+			return await apiRequest("/finance/categories", {
+				method: "POST",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["budget-categories"] });
+			toast({
+				title: "Budget category created",
+				description: "Budget category has been created successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to create budget category",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+export function useTransactions() {
+	return useQuery({
+		queryKey: ["transactions"],
+		queryFn: async () => {
+			return await apiRequest("/finance/transactions");
+		},
+	});
+}
+
+export function useCreateTransaction() {
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
+	return useMutation({
+		mutationFn: async (data: {
+			category_id?: string;
+			type: string;
+			amount: number;
+			description: string;
+			date?: string;
+			payment_method?: string;
+		}) => {
+			return await apiRequest("/finance/transactions", {
+				method: "POST",
+				body: JSON.stringify(data),
+			});
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["transactions"] });
+			queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
+			toast({
+				title: "Transaction created",
+				description: "Transaction has been recorded successfully.",
+			});
+		},
+		onError: (error: any) => {
+			toast({
+				title: "Failed to create transaction",
+				description: error.message,
+				variant: "destructive",
+			});
+		},
+	});
+}
+
+export function useFinancialSummary() {
+	return useQuery({
+		queryKey: ["financial-summary"],
+		queryFn: async () => {
+			return await apiRequest("/finance/summary");
+		},
+	});
+}
+
+// ================================================
 // BROADCASTS HOOKS
 // ================================================
 

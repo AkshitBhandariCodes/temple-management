@@ -26,7 +26,7 @@ import CreatePujaSeriesModal from "./CreatePujaSeriesModal";
 import ExceptionManagementModal from "./ExceptionManagementModal";
 import PujaInstanceModal from "./PujaInstanceModal";
 import StatusUpdateModal from "./StatusUpdateModal";
-import { usePujaSeries } from "@/hooks/use-complete-api";
+import { usePujaSeries, useCreatePujaSeries } from "@/hooks/use-complete-api";
 
 const PujasManagement = () => {
 	console.log("🔵 PujasManagement component rendering...");
@@ -181,10 +181,41 @@ const PujasManagement = () => {
 		setShowExceptionModal(true);
 	};
 
-	const handleCreateSave = (formData: any) => {
-		console.log("Creating puja series:", formData);
-		setShowCreateModal(false);
-		// TODO: Implement actual save logic
+	const createPujaSeriesMutation = useCreatePujaSeries();
+
+	const handleCreateSave = async (formData: any) => {
+		try {
+			console.log("Creating puja series:", formData);
+
+			// Simple data transformation for the simplified schema
+			const pujaSeriesData = {
+				name: formData.title,
+				description: formData.description || "",
+				type: formData.type || "puja",
+				location: formData.location,
+				priest: formData.priest,
+				start_time: formData.startTime,
+				duration_minutes: formData.duration || 60,
+				recurrence_type: formData.recurrenceType || "none",
+				start_date:
+					formData.startDate || new Date().toISOString().split("T")[0],
+			};
+
+			console.log("🚀 Sending puja series data to API:", pujaSeriesData);
+			console.log("🔍 Data types:", {
+				name: typeof pujaSeriesData.name,
+				type: typeof pujaSeriesData.type,
+				location: typeof pujaSeriesData.location,
+				priest: typeof pujaSeriesData.priest,
+				start_time: typeof pujaSeriesData.start_time,
+			});
+
+			const result = await createPujaSeriesMutation.mutateAsync(pujaSeriesData);
+			console.log("✅ Puja creation result:", result);
+			setShowCreateModal(false);
+		} catch (error) {
+			console.error("Failed to create puja series:", error);
+		}
 	};
 
 	// Fetch real puja series data
@@ -480,6 +511,7 @@ const PujasManagement = () => {
 					editData={null}
 					priests={mockPriests}
 					locations={mockLocations}
+					isLoading={createPujaSeriesMutation.isPending}
 				/>
 			)}
 

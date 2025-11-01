@@ -6,20 +6,18 @@ class SupabaseService {
     // Try to use service key first, fallback to anon key
     const serviceKey = process.env.SUPABASE_SERVICE_KEY;
     const anonKey = process.env.SUPABASE_ANON_KEY;
-    
-    // Check if service key is complete (should end with a signature)
-    const isServiceKeyComplete = serviceKey && serviceKey.split('.').length === 3 && serviceKey.length > 100;
-    
-    this.useServiceKey = isServiceKeyComplete;
-    this.supabaseKey = isServiceKeyComplete ? serviceKey : anonKey;
-    
+
+    // For now, always use anon key to avoid authentication issues
+    this.useServiceKey = false;
+    this.supabaseKey = anonKey;
+
     console.log('🔑 Supabase Service initialized with:', this.useServiceKey ? 'SERVICE_ROLE' : 'ANON', 'key');
-    
+
     this.client = createClient(
       process.env.SUPABASE_URL,
       this.supabaseKey,
       {
-        auth: { 
+        auth: {
           persistSession: false,
           autoRefreshToken: false
         },
@@ -32,7 +30,7 @@ class SupabaseService {
   async createUser(userData) {
     try {
       console.log('👤 Creating user in Supabase:', userData.email);
-      
+
       const { data, error } = await this.client
         .from('users')
         .insert(userData)
@@ -122,7 +120,7 @@ class SupabaseService {
     try {
       console.log('🏛️ Creating community in Supabase:', communityData.name);
       console.log('🔑 Using key type:', this.useServiceKey ? 'SERVICE_ROLE' : 'ANON');
-      
+
       // Add debugging info
       console.log('📝 Community data:', {
         name: communityData.name,
@@ -130,7 +128,7 @@ class SupabaseService {
         owner_id: communityData.owner_id,
         status: communityData.status
       });
-      
+
       const { data, error } = await this.client
         .from('communities')
         .insert(communityData)
@@ -144,13 +142,13 @@ class SupabaseService {
           details: error.details,
           hint: error.hint
         });
-        
+
         // Check if it's an RLS policy error
         if (error.code === '42501' || error.message?.includes('policy')) {
           console.error('🚫 RLS Policy Error - Check your Supabase RLS policies!');
           console.error('💡 Run the fix-rls-community-insert.sql in Supabase Dashboard');
         }
-        
+
         throw error;
       }
 
@@ -166,22 +164,22 @@ class SupabaseService {
   async getAllCommunities(filters = {}) {
     try {
       let query = this.client.from('communities').select('*');
-      
+
       // Apply filters
       if (filters.status && filters.status !== 'all') {
         query = query.eq('status', filters.status);
       }
-      
+
       if (filters.search) {
         query = query.or(`name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
       }
-      
+
       if (filters.owner_id && filters.owner_id !== 'all') {
         query = query.eq('owner_id', filters.owner_id);
       }
-      
+
       query = query.order('created_at', { ascending: false });
-      
+
       if (filters.limit) {
         query = query.limit(parseInt(filters.limit));
       }
@@ -251,9 +249,9 @@ class SupabaseService {
     try {
       const { data, error } = await this.client
         .from('communities')
-        .update({ 
-          status: 'archived', 
-          updated_at: new Date().toISOString() 
+        .update({
+          status: 'archived',
+          updated_at: new Date().toISOString()
         })
         .eq('id', String(id))
         .select('*')
@@ -276,7 +274,7 @@ class SupabaseService {
   async testConnection() {
     try {
       console.log('🧪 Testing Supabase connection...');
-      
+
       const { data, error } = await this.client
         .from('communities')
         .select('id, name')

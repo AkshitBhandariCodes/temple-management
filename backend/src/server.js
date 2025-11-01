@@ -120,14 +120,22 @@ app.get('/api/test/community-routes', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('❌ Unhandled error:', err);
+  console.error('❌ GLOBAL ERROR HANDLER:', err);
+  console.error('❌ Error Code:', err.code);
+  console.error('❌ Error Message:', err.message);
+  console.error('❌ Error Details:', err.details);
+  console.error('❌ Error Hint:', err.hint);
 
-  // Supabase validation error
+  // Supabase database errors - show detailed information
   if (err.code && err.code.startsWith('23')) {
     return res.status(400).json({
       success: false,
-      message: 'Validation Error',
-      error: err.message
+      message: `Database Error (${err.code})`,
+      error: err.message,
+      details: err.details,
+      hint: err.hint,
+      code: err.code,
+      supabase_error: err
     });
   }
 
@@ -136,7 +144,9 @@ app.use((err, req, res, next) => {
     return res.status(400).json({
       success: false,
       message: 'Duplicate entry',
-      error: err.message
+      error: err.message,
+      details: err.details,
+      hint: err.hint
     });
   }
 

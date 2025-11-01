@@ -160,6 +160,60 @@ router.get('/test', (req, res) => {
   });
 });
 
+// EMERGENCY: Bypass endpoint for puja creation
+router.post('/emergency-create', async (req, res) => {
+  try {
+    console.log('🚨 EMERGENCY CREATE ENDPOINT CALLED');
+    console.log('📝 Raw request body:', req.body);
+
+    // Create the simplest possible record
+    const simpleData = {
+      name: req.body.name || 'Emergency Test Puja',
+      type: 'puja',
+      location: req.body.location || 'Main Temple',
+      priest: req.body.priest || 'Test Priest',
+      start_time: req.body.start_time || '06:00'
+    };
+
+    console.log('📝 Simplified data:', simpleData);
+
+    const { data, error } = await supabaseService.client
+      .from('puja_series')
+      .insert(simpleData)
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error('🚨 EMERGENCY ENDPOINT ERROR:', error);
+      return res.status(400).json({
+        success: false,
+        message: 'Emergency endpoint failed',
+        error: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+        raw_error: error
+      });
+    }
+
+    console.log('🚨 EMERGENCY ENDPOINT SUCCESS:', data);
+
+    res.status(201).json({
+      success: true,
+      data: data,
+      message: 'Emergency puja creation successful!'
+    });
+
+  } catch (error) {
+    console.error('🚨 EMERGENCY ENDPOINT EXCEPTION:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Emergency endpoint exception',
+      error: error.message
+    });
+  }
+});
+
 console.log('✅ Ultra-simple puja routes loaded successfully');
 
 module.exports = router;

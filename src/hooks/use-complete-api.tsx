@@ -73,16 +73,32 @@ export const apiRequest = async (
 
 		// ✅ FIXED: Better error handling with detailed messages
 		if (!response.ok) {
+			console.error("🔴 FULL API ERROR - Status:", response.status);
+			console.error("🔴 FULL API ERROR - Status Text:", response.statusText);
+			console.error("🔴 FULL API ERROR - URL:", url);
+			console.error("🔴 FULL API ERROR - Endpoint:", endpoint);
+			console.error("🔴 FULL API ERROR - Response Data:", data);
+			console.error(
+				"🔴 FULL API ERROR - Response JSON:",
+				JSON.stringify(data, null, 2)
+			);
+
+			// Show detailed error information
 			const errorMessage =
 				data.message ||
 				data.error ||
 				`HTTP ${response.status}: ${response.statusText}`;
-			console.error("🔴 API Error:", {
-				status: response.status,
-				message: errorMessage,
-				fullData: data,
-			});
-			throw new Error(errorMessage);
+			const errorDetails =
+				data.details || data.hint || data.supabase_error || "";
+
+			console.error("🔴 Parsed Error - Message:", errorMessage);
+			console.error("🔴 Parsed Error - Details:", errorDetails);
+			console.error("🔴 Parsed Error - Code:", data.code);
+			console.error("🔴 Parsed Error - Hint:", data.hint);
+
+			throw new Error(
+				`${errorMessage}${errorDetails ? ` - ${errorDetails}` : ""}`
+			);
 		}
 
 		return data;

@@ -132,4 +132,4 @@ After completing all steps, you should see:
 2. **Successful puja creation** without errors
 3. **Detailed backend logs** showing the creation process
 
-The "Validation errors" should be completely resolved!
+The "Validation errors" should be completel

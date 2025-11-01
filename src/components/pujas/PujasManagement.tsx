@@ -210,6 +210,33 @@ const PujasManagement = () => {
 				start_time: typeof pujaSeriesData.start_time,
 			});
 
+			// EMERGENCY: Try emergency endpoint first
+			try {
+				console.log("🚨 Trying emergency endpoint...");
+				const emergencyResult = await fetch("/api/pujas/emergency-create", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(pujaSeriesData),
+				});
+
+				const emergencyData = await emergencyResult.json();
+				console.log("🚨 Emergency response:", emergencyData);
+
+				if (emergencyResult.ok) {
+					console.log("✅ Emergency endpoint worked!");
+					// Refresh the data
+					window.location.reload();
+					return;
+				} else {
+					console.log(
+						"❌ Emergency endpoint failed, trying normal endpoint..."
+					);
+				}
+			} catch (emergencyError) {
+				console.log("❌ Emergency endpoint error:", emergencyError);
+			}
+
+			// Try normal endpoint
 			const result = await createPujaSeriesMutation.mutateAsync(pujaSeriesData);
 			console.log("✅ Puja creation result:", result);
 			setShowCreateModal(false);

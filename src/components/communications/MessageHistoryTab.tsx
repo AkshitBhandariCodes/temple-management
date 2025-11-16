@@ -1,227 +1,121 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
-  Search,
-  Filter,
-  Mail,
-  Smartphone,
-  Bell,
-  MessageCircle,
-  Eye,
-  Calendar,
-  User,
-  CheckCircle,
-  XCircle,
-  Clock,
-  MousePointer,
-  MessageSquare,
-  ExternalLink
+import { Badge } from '@/components/ui/badge';
+import {
+  Mail, Smartphone, MessageCircle, Bell, Search, Filter,
+  Calendar, CheckCircle, XCircle, Clock, Eye, Download,
+  TrendingUp, Users, Send, Loader2
 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Label } from '../ui/label';
+import { supabase } from '@/lib/supabaseClient';
+import { toast } from 'sonner';
 
-const MessageHistoryTab: React.FC = () => {
+const MessageHistoryTab = () => {
+  const [messages, setMessages] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [channelFilter, setChannelFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [dateRange, setDateRange] = useState('all');
+  const [channelFilter, setChannelFilter] = useState('all');
   const [selectedMessage, setSelectedMessage] = useState<any>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
-  // Mock data for message history
-  const messageHistory = [
-    {
-      id: 1,
-      subject: 'Welcome to Our Temple Community!',
-      content: 'Dear John Doe, Welcome to our temple community! We are delighted to have you join us...',
-      channel: 'email',
-      messageType: 'individual',
-      template: 'Welcome New Member',
-      recipient: {
-        name: 'John Doe',
-        email: 'john.doe@email.com',
-        segment: 'New Members'
-      },
-      deliveryStatus: 'delivered',
-      deliveryTimestamp: '2024-01-15 10:30 AM',
-      engagement: {
-        opened: true,
-        openedAt: '2024-01-15 11:45 AM',
-        clicked: true,
-        clickedAt: '2024-01-15 12:15 PM',
-        responded: false
-      },
-      campaign: {
-        name: 'New Member Welcome Series',
-        id: 'NMW-001'
-      },
-      sender: 'Admin User',
-      priority: 'medium'
-    },
-    {
-      id: 2,
-      subject: null,
-      content: 'Hi Sarah! Reminder: Diwali Celebration tomorrow at 6:00 PM. See you there!',
-      channel: 'sms',
-      messageType: 'broadcast',
-      template: 'Event Reminder',
-      recipient: {
-        name: 'Sarah Johnson',
-        phone: '+1-555-0123',
-        segment: 'Event Attendees'
-      },
-      deliveryStatus: 'delivered',
-      deliveryTimestamp: '2024-01-14 09:00 AM',
-      engagement: {
-        opened: true,
-        openedAt: '2024-01-14 09:05 AM',
-        clicked: false,
-        responded: true,
-        responseAt: '2024-01-14 09:30 AM'
-      },
-      campaign: {
-        name: 'Diwali Event Reminders',
-        id: 'DER-002'
-      },
-      sender: 'Events Team',
-      priority: 'high'
-    },
-    {
-      id: 3,
-      subject: 'Puja Starting Soon',
-      content: 'Evening Aarti will begin in 15 minutes at the main hall.',
-      channel: 'push',
-      messageType: 'broadcast',
-      template: 'Puja Alert',
-      recipient: {
-        name: 'All Users',
-        segment: 'All Users'
-      },
-      deliveryStatus: 'delivered',
-      deliveryTimestamp: '2024-01-13 06:45 PM',
-      engagement: {
-        opened: true,
-        openedAt: '2024-01-13 06:46 PM',
-        clicked: false,
-        responded: false
-      },
-      campaign: {
-        name: 'Daily Puja Notifications',
-        id: 'DPN-003'
-      },
-      sender: 'Puja Committee',
-      priority: 'medium'
-    },
-    {
-      id: 4,
-      subject: 'Thank You for Your Generous Donation',
-      content: 'Dear Michael Smith, Thank you for your generous donation of $500. Your support helps us...',
-      channel: 'email',
-      messageType: 'individual',
-      template: 'Donation Receipt',
-      recipient: {
-        name: 'Michael Smith',
-        email: 'michael.smith@email.com',
-        segment: 'Donors'
-      },
-      deliveryStatus: 'delivered',
-      deliveryTimestamp: '2024-01-12 02:15 PM',
-      engagement: {
-        opened: true,
-        openedAt: '2024-01-12 03:20 PM',
-        clicked: true,
-        clickedAt: '2024-01-12 03:25 PM',
-        responded: false
-      },
-      campaign: {
-        name: 'Donation Acknowledgments',
-        id: 'DA-004'
-      },
-      sender: 'Finance Team',
-      priority: 'medium'
-    },
-    {
-      id: 5,
-      subject: null,
-      content: 'Thank you Lisa for your $100 donation. Receipt: RCP-2024-001',
-      channel: 'sms',
-      messageType: 'individual',
-      template: 'Donation Confirmation',
-      recipient: {
-        name: 'Lisa Brown',
-        phone: '+1-555-0456',
-        segment: 'Donors'
-      },
-      deliveryStatus: 'failed',
-      deliveryTimestamp: '2024-01-11 11:30 AM',
-      failureReason: 'Invalid phone number',
-      engagement: {
-        opened: false,
-        clicked: false,
-        responded: false
-      },
-      campaign: {
-        name: 'Donation Confirmations',
-        id: 'DC-005'
-      },
-      sender: 'Finance Team',
-      priority: 'low'
-    },
-    {
-      id: 6,
-      subject: 'Your Volunteer Assignment - January 20, 2024',
-      content: 'Dear David Wilson, You have been assigned to Temple Cleaning on January 20, 2024...',
-      channel: 'email',
-      messageType: 'individual',
-      template: 'Volunteer Assignment',
-      recipient: {
-        name: 'David Wilson',
-        email: 'david.wilson@email.com',
-        segment: 'Volunteers'
-      },
-      deliveryStatus: 'delivered',
-      deliveryTimestamp: '2024-01-10 08:00 AM',
-      engagement: {
-        opened: true,
-        openedAt: '2024-01-10 08:30 AM',
-        clicked: false,
-        responded: true,
-        responseAt: '2024-01-10 09:15 AM'
-      },
-      campaign: {
-        name: 'Weekly Volunteer Assignments',
-        id: 'WVA-006'
-      },
-      sender: 'Volunteer Coordinator',
-      priority: 'medium'
-    }
-  ];
+  // Stats
+  const [stats, setStats] = useState({
+    total: 0,
+    delivered: 0,
+    failed: 0,
+    pending: 0
+  });
 
-  const getChannelIcon = (channel: string) => {
-    switch (channel) {
-      case 'email': return <Mail className="h-4 w-4" />;
-      case 'sms': return <Smartphone className="h-4 w-4" />;
-      case 'push': return <Bell className="h-4 w-4" />;
-      case 'whatsapp': return <MessageCircle className="h-4 w-4" />;
-      default: return null;
+  useEffect(() => {
+    fetchMessageLogs();
+
+    // ✅ Real-time subscription
+    const channel = supabase
+      .channel('message-logs-changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'message_logs' },
+        () => {
+          fetchMessageLogs();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const fetchMessageLogs = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('message_logs')
+        .select('*')
+        .order('delivery_timestamp', { ascending: false });
+
+      if (error) throw error;
+
+      setMessages(data || []);
+
+      // Calculate stats
+      const total = data?.length || 0;
+      const delivered = data?.filter(m => m.delivery_status === 'delivered' || m.delivery_status === 'sent').length || 0;
+      const failed = data?.filter(m => m.delivery_status === 'failed').length || 0;
+      const pending = data?.filter(m => m.delivery_status === 'pending').length || 0;
+
+      setStats({ total, delivered, failed, pending });
+
+    } catch (error) {
+      console.error('Error fetching message logs:', error);
+      toast.error('Failed to load message history');
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  const filteredMessages = messages.filter(message => {
+    const matchesSearch = 
+      message.subject?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      message.content?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      message.recipient_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      message.recipient_email?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || message.delivery_status === statusFilter;
+    const matchesChannel = channelFilter === 'all' || message.channel === channelFilter;
+    
+    return matchesSearch && matchesStatus && matchesChannel;
+  });
+
+  const getChannelIcon = (channel: string) => {
+    const icons: Record<string, any> = {
+      'email': Mail,
+      'sms': Smartphone,
+      'whatsapp': MessageCircle,
+      'push': Bell
+    };
+    const Icon = icons[channel] || Mail;
+    return <Icon className="h-4 w-4" />;
+  };
+
   const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'delivered': return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case 'failed': return <XCircle className="h-4 w-4 text-red-600" />;
-      case 'pending': return <Clock className="h-4 w-4 text-yellow-600" />;
-      default: return null;
-    }
+    const icons: Record<string, any> = {
+      'delivered': CheckCircle,
+      'sent': CheckCircle,
+      'failed': XCircle,
+      'pending': Clock
+    };
+    const Icon = icons[status] || Clock;
+    return <Icon className="h-4 w-4" />;
   };
 
   const getStatusBadge = (status: string) => {
     const colors: Record<string, string> = {
       'delivered': 'bg-green-100 text-green-800',
+      'sent': 'bg-green-100 text-green-800',
       'failed': 'bg-red-100 text-red-800',
       'pending': 'bg-yellow-100 text-yellow-800'
     };
@@ -232,365 +126,308 @@ const MessageHistoryTab: React.FC = () => {
     );
   };
 
-  const filteredMessages = messageHistory.filter(message => {
-    const matchesSearch = 
-      (message.subject && message.subject.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      message.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      message.recipient.name.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesChannel = channelFilter === 'all' || message.channel === channelFilter;
-    const matchesStatus = statusFilter === 'all' || message.deliveryStatus === statusFilter;
-    
-    return matchesSearch && matchesChannel && matchesStatus;
-  });
+  const handleViewDetails = (message: any) => {
+    setSelectedMessage(message);
+    setShowDetailsModal(true);
+  };
+
+  const exportToCSV = () => {
+    const csvContent = [
+      ['Timestamp', 'Channel', 'Recipient', 'Subject', 'Status'],
+      ...filteredMessages.map(m => [
+        new Date(m.delivery_timestamp).toLocaleString(),
+        m.channel,
+        m.recipient_email || m.recipient_phone || m.recipient_name,
+        m.subject || 'N/A',
+        m.delivery_status
+      ])
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `message-history-${new Date().toISOString()}.csv`;
+    a.click();
+    toast.success('Exported to CSV');
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <p className="text-gray-500 mt-4">Loading message history...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold">Message History</h2>
-        <p className="text-gray-600">View and analyze all sent messages and their performance</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Message History</h2>
+          <p className="text-gray-600 mt-1">View and analyze all sent messages and their performance</p>
+        </div>
+        <Button onClick={exportToCSV} variant="outline">
+          <Download className="h-4 w-4 mr-2" />
+          Export CSV
+        </Button>
       </div>
 
-      {/* Search & Filter Panel */}
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Messages</p>
+                <p className="text-3xl font-bold mt-2">{stats.total.toLocaleString()}</p>
+              </div>
+              <Send className="h-10 w-10 text-blue-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Delivered</p>
+                <p className="text-3xl font-bold mt-2 text-green-600">{stats.delivered.toLocaleString()}</p>
+              </div>
+              <CheckCircle className="h-10 w-10 text-green-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Failed</p>
+                <p className="text-3xl font-bold mt-2 text-red-600">{stats.failed.toLocaleString()}</p>
+              </div>
+              <XCircle className="h-10 w-10 text-red-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Success Rate</p>
+                <p className="text-3xl font-bold mt-2 text-blue-600">
+                  {stats.total > 0 ? Math.round((stats.delivered / stats.total) * 100) : 0}%
+                </p>
+              </div>
+              <TrendingUp className="h-10 w-10 text-blue-500" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="md:col-span-2">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Search by content, recipient, or sender..."
+                  placeholder="Search messages..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
               </div>
             </div>
-            <div className="flex gap-2">
-              <Select value={channelFilter} onValueChange={setChannelFilter}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Channel" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Channels</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
-                  <SelectItem value="sms">SMS</SelectItem>
-                  <SelectItem value="push">Push</SelectItem>
-                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                </SelectContent>
-              </Select>
-              
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="delivered">Delivered</SelectItem>
-                  <SelectItem value="failed">Failed</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                </SelectContent>
-              </Select>
 
-              <Select value={dateRange} onValueChange={setDateRange}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Date Range" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Time</SelectItem>
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="week">This Week</SelectItem>
-                  <SelectItem value="month">This Month</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="delivered">Delivered</SelectItem>
+                <SelectItem value="sent">Sent</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={channelFilter} onValueChange={setChannelFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Channel" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Channels</SelectItem>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="sms">SMS</SelectItem>
+                <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                <SelectItem value="push">Push</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
 
       {/* Message History Table */}
       <Card>
-        <CardHeader>
-          <CardTitle>Message Archive ({filteredMessages.length} messages)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-3">Message Details</th>
-                  <th className="text-left p-3">Recipient Information</th>
-                  <th className="text-left p-3">Engagement Data</th>
-                  <th className="text-left p-3">Campaign Association</th>
-                  <th className="text-left p-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredMessages.map((message) => (
-                  <tr key={message.id} className="border-b hover:bg-gray-50">
-                    <td className="p-3">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          {getChannelIcon(message.channel)}
-                          <Badge variant="outline">{message.messageType}</Badge>
-                        </div>
-                        {message.subject && (
-                          <div className="font-medium text-blue-600 cursor-pointer hover:underline">
-                            {message.subject}
-                          </div>
-                        )}
-                        <div className="text-sm text-gray-600 line-clamp-2">
-                          {message.content}
-                        </div>
-                        {message.template && (
-                          <div className="text-xs text-gray-500">
-                            Template: {message.template}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    
-                    <td className="p-3">
-                      <div className="space-y-1">
-                        <div className="font-medium">{message.recipient.name}</div>
-                        <div className="text-sm text-gray-600">
-                          {message.recipient.email || message.recipient.phone || 'Push notification'}
-                        </div>
-                        <Badge variant="outline" className="text-xs">
-                          {message.recipient.segment}
-                        </Badge>
-                        <div className="flex items-center gap-2 text-sm">
-                          {getStatusIcon(message.deliveryStatus)}
-                          {getStatusBadge(message.deliveryStatus)}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          <Calendar className="h-3 w-3 inline mr-1" />
-                          {message.deliveryTimestamp}
-                        </div>
-                      </div>
-                    </td>
-                    
-                    <td className="p-3">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Eye className="h-3 w-3" />
-                          <span className={message.engagement.opened ? 'text-green-600' : 'text-gray-400'}>
-                            {message.engagement.opened ? 'Opened' : 'Not opened'}
-                          </span>
-                        </div>
-                        {message.engagement.opened && message.engagement.openedAt && (
-                          <div className="text-xs text-gray-500 ml-5">
-                            {message.engagement.openedAt}
-                          </div>
-                        )}
-                        
-                        <div className="flex items-center gap-2 text-sm">
-                          <MousePointer className="h-3 w-3" />
-                          <span className={message.engagement.clicked ? 'text-green-600' : 'text-gray-400'}>
-                            {message.engagement.clicked ? 'Clicked' : 'Not clicked'}
-                          </span>
-                        </div>
-                        {message.engagement.clicked && message.engagement.clickedAt && (
-                          <div className="text-xs text-gray-500 ml-5">
-                            {message.engagement.clickedAt}
-                          </div>
-                        )}
-                        
-                        <div className="flex items-center gap-2 text-sm">
-                          <MessageSquare className="h-3 w-3" />
-                          <span className={message.engagement.responded ? 'text-green-600' : 'text-gray-400'}>
-                            {message.engagement.responded ? 'Responded' : 'No response'}
-                          </span>
-                        </div>
-                        {message.engagement.responded && message.engagement.responseAt && (
-                          <div className="text-xs text-gray-500 ml-5">
-                            {message.engagement.responseAt}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    
-                    <td className="p-3">
-                      <div className="space-y-1">
-                        <div className="font-medium text-blue-600 cursor-pointer hover:underline">
-                          {message.campaign.name}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          ID: {message.campaign.id}
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-gray-500">
-                          <User className="h-3 w-3" />
-                          {message.sender}
-                        </div>
-                        <Badge variant="outline" className="text-xs">
-                          {message.priority} priority
-                        </Badge>
-                      </div>
-                    </td>
-                    
-                    <td className="p-3">
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        onClick={() => setSelectedMessage(message)}
-                      >
-                        <Eye className="h-3 w-3 mr-1" />
-                        View Details
-                      </Button>
-                    </td>
+        <CardContent className="pt-6">
+          {filteredMessages.length === 0 ? (
+            <div className="text-center py-12">
+              <MessageCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500 font-medium">No messages found</p>
+              <p className="text-sm text-gray-400 mt-2">
+                {messages.length === 0 
+                  ? 'Messages will appear here once broadcasts are sent' 
+                  : 'Try adjusting your filters'}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left p-4 font-semibold">Message Details</th>
+                    <th className="text-left p-4 font-semibold">Recipient</th>
+                    <th className="text-left p-4 font-semibold">Status</th>
+                    <th className="text-left p-4 font-semibold">Timestamp</th>
+                    <th className="text-left p-4 font-semibold">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filteredMessages.map((message) => (
+                    <tr key={message.id} className="border-b hover:bg-gray-50">
+                      <td className="p-4">
+                        <div className="flex items-start gap-3">
+                          {getChannelIcon(message.channel)}
+                          <div>
+                            {message.subject && (
+                              <p className="font-medium">{message.subject}</p>
+                            )}
+                            <p className="text-sm text-gray-600 line-clamp-2">
+                              {message.content}
+                            </p>
+                            {message.template_used && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Template: {message.template_used}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <p className="font-medium">
+                          {message.recipient_name || 'Unknown'}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          {message.recipient_email || message.recipient_phone || 'N/A'}
+                        </p>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          {getStatusIcon(message.delivery_status)}
+                          {getStatusBadge(message.delivery_status)}
+                        </div>
+                        {message.error_message && (
+                          <p className="text-xs text-red-600 mt-1">{message.error_message}</p>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        <div className="text-sm">
+                          <p>{new Date(message.delivery_timestamp).toLocaleDateString()}</p>
+                          <p className="text-gray-600">
+                            {new Date(message.delivery_timestamp).toLocaleTimeString()}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleViewDetails(message)}
+                        >
+                          <Eye className="h-3 w-3 mr-1" />
+                          View
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Message Detail Modal */}
-      {selectedMessage && (
-        <Dialog open={!!selectedMessage} onOpenChange={() => setSelectedMessage(null)}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Message Details</DialogTitle>
-            </DialogHeader>
-            
-            <div className="space-y-6">
-              {/* Message Content */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Message Content</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-2">
+      {/* Message Details Modal */}
+      <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Message Details</DialogTitle>
+          </DialogHeader>
+          {selectedMessage && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Channel</label>
+                  <div className="flex items-center gap-2 mt-1">
                     {getChannelIcon(selectedMessage.channel)}
-                    <Badge variant="outline">{selectedMessage.channel}</Badge>
-                    <Badge variant="outline">{selectedMessage.messageType}</Badge>
+                    <span className="capitalize">{selectedMessage.channel}</span>
                   </div>
-                  
-                  {selectedMessage.subject && (
-                    <div>
-                      <Label>Subject</Label>
-                      <div className="p-2 bg-gray-50 rounded">{selectedMessage.subject}</div>
-                    </div>
-                  )}
-                  
-                  <div>
-                    <Label>Content</Label>
-                    <div className="p-3 bg-gray-50 rounded whitespace-pre-wrap">
-                      {selectedMessage.content}
-                    </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Status</label>
+                  <div className="mt-1">
+                    {getStatusBadge(selectedMessage.delivery_status)}
                   </div>
-                  
-                  {selectedMessage.template && (
-                    <div>
-                      <Label>Template Used</Label>
-                      <div className="p-2 bg-gray-50 rounded">{selectedMessage.template}</div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
-              {/* Delivery Information */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Delivery Information</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label>Recipient</Label>
-                      <div className="p-2 bg-gray-50 rounded">
-                        <div className="font-medium">{selectedMessage.recipient.name}</div>
-                        <div className="text-sm text-gray-600">
-                          {selectedMessage.recipient.email || selectedMessage.recipient.phone || 'Push notification'}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <Label>Delivery Status</Label>
-                      <div className="p-2 bg-gray-50 rounded flex items-center gap-2">
-                        {getStatusIcon(selectedMessage.deliveryStatus)}
-                        {getStatusBadge(selectedMessage.deliveryStatus)}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <Label>Delivery Timestamp</Label>
-                    <div className="p-2 bg-gray-50 rounded">{selectedMessage.deliveryTimestamp}</div>
-                  </div>
-                  
-                  {selectedMessage.failureReason && (
-                    <div>
-                      <Label>Failure Reason</Label>
-                      <div className="p-2 bg-red-50 rounded text-red-800">
-                        {selectedMessage.failureReason}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              {selectedMessage.subject && (
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Subject</label>
+                  <p className="mt-1">{selectedMessage.subject}</p>
+                </div>
+              )}
 
-              {/* Engagement Tracking */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Engagement Tracking</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-3 border rounded">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Eye className="h-4 w-4" />
-                        <span className="font-medium">Opened</span>
-                      </div>
-                      <div className={selectedMessage.engagement.opened ? 'text-green-600' : 'text-gray-400'}>
-                        {selectedMessage.engagement.opened ? 'Yes' : 'No'}
-                      </div>
-                      {selectedMessage.engagement.openedAt && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          {selectedMessage.engagement.openedAt}
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="p-3 border rounded">
-                      <div className="flex items-center gap-2 mb-2">
-                        <MousePointer className="h-4 w-4" />
-                        <span className="font-medium">Clicked</span>
-                      </div>
-                      <div className={selectedMessage.engagement.clicked ? 'text-green-600' : 'text-gray-400'}>
-                        {selectedMessage.engagement.clicked ? 'Yes' : 'No'}
-                      </div>
-                      {selectedMessage.engagement.clickedAt && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          {selectedMessage.engagement.clickedAt}
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="p-3 border rounded">
-                      <div className="flex items-center gap-2 mb-2">
-                        <MessageSquare className="h-4 w-4" />
-                        <span className="font-medium">Responded</span>
-                      </div>
-                      <div className={selectedMessage.engagement.responded ? 'text-green-600' : 'text-gray-400'}>
-                        {selectedMessage.engagement.responded ? 'Yes' : 'No'}
-                      </div>
-                      {selectedMessage.engagement.responseAt && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          {selectedMessage.engagement.responseAt}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Content</label>
+                <div className="mt-1 p-4 bg-gray-50 rounded-lg border">
+                  <p className="whitespace-pre-wrap">{selectedMessage.content}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700">Recipient</label>
+                <div className="mt-1">
+                  <p className="font-medium">{selectedMessage.recipient_name}</p>
+                  <p className="text-sm text-gray-600">
+                    {selectedMessage.recipient_email || selectedMessage.recipient_phone}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700">Delivery Time</label>
+                <p className="mt-1">
+                  {new Date(selectedMessage.delivery_timestamp).toLocaleString()}
+                </p>
+              </div>
+
+              {selectedMessage.error_message && (
+                <div>
+                  <label className="text-sm font-medium text-red-700">Error Message</label>
+                  <p className="mt-1 text-red-600">{selectedMessage.error_message}</p>
+                </div>
+              )}
             </div>
-          </DialogContent>
-        </Dialog>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

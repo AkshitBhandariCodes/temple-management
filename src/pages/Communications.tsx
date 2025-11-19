@@ -3,9 +3,11 @@ import CommunicationsManagement from "@/components/communications/Communications
 
 const Communications = () => {
   return (
-    <AdminLayout>
-      <CommunicationsManagement />
-    </AdminLayout>
+    <CommunicationsManagement />
+    // // <AdminLayout>
+    //   {/* CommunicationsManagement now has no extra padding */}
+    //   <CommunicationsManagement />
+    // {/* </AdminLayout> */}
   );
 };
 

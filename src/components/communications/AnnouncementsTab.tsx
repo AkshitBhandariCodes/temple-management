@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,89 +7,22 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { 
-  Megaphone, 
-  Pin, 
-  Eye, 
-  Edit, 
-  Trash2,
-  Plus,
-  Calendar,
-  Users,
-  Bell,
-  Mail,
-  Smartphone,
-  MessageCircle,
-  Clock,
-  AlertCircle
+import {
+  Megaphone, Pin, Eye, Edit, Trash2, Plus, Calendar, Users,
+  Bell, Mail, Smartphone, MessageCircle, Clock, AlertCircle
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { supabase } from '@/lib/supabaseClient';
+import { toast } from 'sonner';
 
-const AnnouncementsTab: React.FC = () => {
+const AnnouncementsTab = forwardRef((props, ref) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [announcements, setAnnouncements] = useState([
-    {
-      id: 1,
-      title: 'Temple Closure for Maintenance',
-      content: 'The temple will be closed for routine maintenance from January 20-22, 2024. All scheduled pujas will be rescheduled.',
-      category: 'Important',
-      priority: 'high',
-      audience: 'All Users',
-      visibility: 'Public',
-      isPinned: true,
-      publishDate: '2024-01-15',
-      expiryDate: '2024-01-25',
-      status: 'active',
-      views: 1247,
-      createdBy: 'Admin User'
-    },
-    {
-      id: 2,
-      title: 'New Volunteer Training Session',
-      content: 'Join us for a comprehensive volunteer training session covering all temple activities and protocols.',
-      category: 'Events',
-      priority: 'medium',
-      audience: 'Volunteers',
-      visibility: 'Community',
-      isPinned: false,
-      publishDate: '2024-01-10',
-      expiryDate: '2024-02-10',
-      status: 'active',
-      views: 456,
-      createdBy: 'Volunteer Coordinator'
-    },
-    {
-      id: 3,
-      title: 'Festival Celebration Updates',
-      content: 'Updated schedule and guidelines for the upcoming Diwali celebration. Please review the new timings.',
-      category: 'Festivals',
-      priority: 'medium',
-      audience: 'Community Members',
-      visibility: 'Community',
-      isPinned: true,
-      publishDate: '2024-01-08',
-      expiryDate: '2024-11-15',
-      status: 'active',
-      views: 892,
-      createdBy: 'Events Team'
-    },
-    {
-      id: 4,
-      title: 'Donation Drive Success',
-      content: 'Thank you to everyone who contributed to our recent donation drive. We exceeded our goal by 150%!',
-      category: 'General',
-      priority: 'low',
-      audience: 'Donors',
-      visibility: 'Private',
-      isPinned: false,
-      publishDate: '2024-01-05',
-      expiryDate: '2024-01-20',
-      status: 'expired',
-      views: 234,
-      createdBy: 'Finance Team'
-    }
-  ]);
-
+  const [announcements, setAnnouncements] = useState([]);
+  
+  // ✅ NEW: Add edit state
+  const [editingAnnouncement, setEditingAnnouncement] = useState<any>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  
   const [newAnnouncement, setNewAnnouncement] = useState({
     title: '',
     content: '',
@@ -97,8 +30,8 @@ const AnnouncementsTab: React.FC = () => {
     priority: 'medium',
     audience: '',
     visibility: 'Public',
-    isPinned: false,
-    expiryDate: '',
+    is_pinned: false,
+    expiry_date: '',
     notifications: {
       push: false,
       email: false,
@@ -106,6 +39,41 @@ const AnnouncementsTab: React.FC = () => {
       whatsapp: false
     }
   });
+
+  useImperativeHandle(ref, () => ({
+    openCreateModal: () => {
+      setShowCreateModal(true);
+    }
+  }));
+
+  const fetchAnnouncements = async () => {
+    const { data, error } = await supabase
+      .from('announcements')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (!error && data) {
+      setAnnouncements(data);
+    }
+  };
+
+  useEffect(() => {
+    fetchAnnouncements();
+    
+    const channel = supabase
+      .channel('announcements-changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'announcements' },
+        () => {
+          fetchAnnouncements();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const getPriorityBadge = (priority: string) => {
     const colors: Record<string, string> = {
@@ -133,44 +101,108 @@ const AnnouncementsTab: React.FC = () => {
     );
   };
 
-  const handleCreateAnnouncement = () => {
-    const announcement = {
-      id: announcements.length + 1,
-      ...newAnnouncement,
-      publishDate: new Date().toISOString().split('T')[0],
-      status: 'active',
-      views: 0,
-      createdBy: 'Current User'
-    };
-    
-    setAnnouncements([announcement, ...announcements]);
+  // ✅ NEW: Handle edit click
+  const handleEdit = (announcement: any) => {
+    setEditingAnnouncement(announcement);
+    setIsEditMode(true);
     setNewAnnouncement({
-      title: '',
-      content: '',
-      category: '',
-      priority: 'medium',
-      audience: '',
-      visibility: 'Public',
-      isPinned: false,
-      expiryDate: '',
-      notifications: {
+      title: announcement.title,
+      content: announcement.content,
+      category: announcement.category,
+      priority: announcement.priority,
+      audience: announcement.audience,
+      visibility: announcement.visibility,
+      is_pinned: announcement.is_pinned,
+      expiry_date: announcement.expiry_date || '',
+      notifications: announcement.notifications || {
         push: false,
         email: false,
         sms: false,
         whatsapp: false
       }
     });
-    setShowCreateModal(false);
+    setShowCreateModal(true);
   };
 
-  const togglePin = (id: number) => {
-    setAnnouncements(announcements.map(ann => 
-      ann.id === id ? { ...ann, isPinned: !ann.isPinned } : ann
-    ));
+  const handleCreateAnnouncement = async () => {
+    if (!newAnnouncement.title.trim()) {
+      toast.error('Please enter a title');
+      return;
+    }
+
+    if (!newAnnouncement.content.trim()) {
+      toast.error('Please enter content');
+      return;
+    }
+
+    try {
+      if (isEditMode && editingAnnouncement) {
+        // ✅ UPDATE existing announcement
+        const { error } = await supabase
+          .from('announcements')
+          .update({
+            ...newAnnouncement,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingAnnouncement.id);
+
+        if (error) throw error;
+        toast.success('Announcement updated successfully');
+      } else {
+        // CREATE new announcement
+        const announcement = {
+          ...newAnnouncement,
+          publish_date: new Date().toISOString().split('T')[0],
+          status: 'active',
+          views: 0,
+          created_by: 'Current User'
+        };
+
+        const { error } = await supabase
+          .from('announcements')
+          .insert([announcement]);
+
+        if (error) throw error;
+        toast.success('Announcement created successfully');
+      }
+
+      // Reset form
+      setNewAnnouncement({
+        title: '',
+        content: '',
+        category: '',
+        priority: 'medium',
+        audience: '',
+        visibility: 'Public',
+        is_pinned: false,
+        expiry_date: '',
+        notifications: { push: false, email: false, sms: false, whatsapp: false }
+      });
+      
+      setShowCreateModal(false);
+      setIsEditMode(false);
+      setEditingAnnouncement(null);
+      fetchAnnouncements();
+    } catch (error: any) {
+      console.error('Error:', error);
+      toast.error(error.message || 'Operation failed');
+    }
   };
 
-  const deleteAnnouncement = (id: number) => {
-    setAnnouncements(announcements.filter(ann => ann.id !== id));
+  const togglePin = async (id: string, currentPinned: boolean) => {
+    await supabase
+      .from('announcements')
+      .update({ is_pinned: !currentPinned })
+      .eq('id', id);
+    fetchAnnouncements();
+  };
+
+  const deleteAnnouncement = async (id: string) => {
+    if (!confirm('Delete this announcement?')) return;
+    
+    await supabase.from('announcements').delete().eq('id', id);
+    toast.success('Announcement deleted');
+    fetchAnnouncements();
   };
 
   return (
@@ -178,10 +210,17 @@ const AnnouncementsTab: React.FC = () => {
       {/* Header Actions */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold">Announcements Management</h2>
-          <p className="text-gray-600">Create and manage temple announcements and notices</p>
+          <h2 className="text-2xl font-bold text-gray-900">Announcements Management</h2>
+          <p className="text-gray-600 mt-1">Create and manage temple announcements and notices</p>
         </div>
-        <Button onClick={() => setShowCreateModal(true)}>
+        <Button 
+          onClick={() => {
+            setIsEditMode(false);
+            setEditingAnnouncement(null);
+            setShowCreateModal(true);
+          }}
+          className="bg-orange-500 hover:bg-orange-600"
+        >
           <Plus className="h-4 w-4 mr-2" />
           New Announcement
         </Button>
@@ -190,153 +229,163 @@ const AnnouncementsTab: React.FC = () => {
       {/* Active Announcements */}
       <div className="space-y-4">
         {announcements
-          .sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0))
+          .sort((a, b) => (b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0))
           .map((announcement) => (
-          <Card key={announcement.id} className={`${announcement.isPinned ? 'ring-2 ring-blue-200 bg-blue-50' : ''}`}>
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    {announcement.isPinned && <Pin className="h-4 w-4 text-blue-600" />}
-                    <h3 className="text-lg font-semibold">{announcement.title}</h3>
-                    {getPriorityBadge(announcement.priority)}
-                    {getStatusBadge(announcement.status)}
-                  </div>
-                  
-                  <p className="text-gray-700 mb-4 line-clamp-2">{announcement.content}</p>
-                  
-                  <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-                    <div className="flex items-center gap-1">
-                      <Users className="h-4 w-4" />
-                      {announcement.audience}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-4 w-4" />
-                      Published {announcement.publishDate}
-                    </div>
-                    {announcement.expiryDate && (
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-4 w-4" />
-                        Expires {announcement.expiryDate}
+            <Card key={announcement.id} className="hover:shadow-lg transition-shadow">
+              <CardContent className="pt-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-start gap-3 flex-1">
+                    {announcement.is_pinned && <Pin className="h-5 w-5 text-orange-500 flex-shrink-0 mt-1" />}
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold mb-2">{announcement.title}</h3>
+                      <div className="flex gap-2 mb-3">
+                        {getPriorityBadge(announcement.priority)}
+                        {getStatusBadge(announcement.status)}
                       </div>
-                    )}
-                    <div className="flex items-center gap-1">
-                      <Eye className="h-4 w-4" />
-                      {announcement.views} views
+                      <p className="text-gray-600 mb-4">{announcement.content}</p>
                     </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      onClick={() => togglePin(announcement.id, announcement.is_pinned)}
+                    >
+                      <Pin className="h-4 w-4" />
+                    </Button>
+                    {/* ✅ EDIT BUTTON */}
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      onClick={() => handleEdit(announcement)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      onClick={() => deleteAnnouncement(announcement.id)}
+                      className="text-red-600"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm text-gray-600 border-t pt-4">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    {announcement.audience}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Published {announcement.publish_date}
+                  </div>
+                  {announcement.expiry_date && (
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Expires {announcement.expiry_date}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Eye className="h-4 w-4" />
+                    {announcement.views} views
+                  </div>
+                  <div className="flex gap-2">
                     <Badge variant="outline">{announcement.category}</Badge>
                     <Badge variant="outline">{announcement.visibility}</Badge>
                   </div>
                 </div>
-                
-                <div className="flex gap-2 ml-4">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => togglePin(announcement.id)}
-                  >
-                    <Pin className={`h-4 w-4 ${announcement.isPinned ? 'text-blue-600' : ''}`} />
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => deleteAnnouncement(announcement.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))}
       </div>
 
-      {/* Create Announcement Modal */}
+      {/* Create/Edit Announcement Modal */}
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create New Announcement</DialogTitle>
+            <DialogTitle>
+              {isEditMode ? 'Edit Announcement' : 'Create New Announcement'}
+            </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-6">
             {/* Basic Information */}
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="title">Title</Label>
-                <Input
-                  id="title"
-                  value={newAnnouncement.title}
-                  onChange={(e) => setNewAnnouncement({...newAnnouncement, title: e.target.value})}
-                  placeholder="Enter announcement title..."
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="content">Content</Label>
-                <Textarea
-                  id="content"
-                  value={newAnnouncement.content}
-                  onChange={(e) => setNewAnnouncement({...newAnnouncement, content: e.target.value})}
-                  placeholder="Enter announcement content..."
-                  rows={6}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Basic Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div>
-                  <Label>Category</Label>
-                  <Select 
-                    value={newAnnouncement.category} 
-                    onValueChange={(value) => setNewAnnouncement({...newAnnouncement, category: value})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Important">Important</SelectItem>
-                      <SelectItem value="Events">Events</SelectItem>
-                      <SelectItem value="Festivals">Festivals</SelectItem>
-                      <SelectItem value="General">General</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Title</Label>
+                  <Input
+                    value={newAnnouncement.title}
+                    onChange={(e) => setNewAnnouncement({...newAnnouncement, title: e.target.value})}
+                    placeholder="Enter announcement title..."
+                  />
                 </div>
 
                 <div>
-                  <Label>Priority Level</Label>
-                  <Select 
-                    value={newAnnouncement.priority} 
-                    onValueChange={(value) => setNewAnnouncement({...newAnnouncement, priority: value})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="high">High Priority</SelectItem>
-                      <SelectItem value="medium">Medium Priority</SelectItem>
-                      <SelectItem value="low">Low Priority</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Content</Label>
+                  <Textarea
+                    value={newAnnouncement.content}
+                    onChange={(e) => setNewAnnouncement({...newAnnouncement, content: e.target.value})}
+                    placeholder="Enter announcement content..."
+                    rows={6}
+                  />
                 </div>
-              </div>
-            </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Category</Label>
+                    <Select 
+                      value={newAnnouncement.category}
+                      onValueChange={(value) => setNewAnnouncement({...newAnnouncement, category: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Important">Important</SelectItem>
+                        <SelectItem value="Events">Events</SelectItem>
+                        <SelectItem value="Festivals">Festivals</SelectItem>
+                        <SelectItem value="General">General</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Priority Level</Label>
+                    <Select 
+                      value={newAnnouncement.priority}
+                      onValueChange={(value) => setNewAnnouncement({...newAnnouncement, priority: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="high">High Priority</SelectItem>
+                        <SelectItem value="medium">Medium Priority</SelectItem>
+                        <SelectItem value="low">Low Priority</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Audience & Visibility */}
             <Card>
               <CardHeader>
-                <CardTitle>Audience & Visibility</CardTitle>
+                <CardTitle className="text-lg">Audience & Visibility</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Target Audience</Label>
                     <Select 
-                      value={newAnnouncement.audience} 
+                      value={newAnnouncement.audience}
                       onValueChange={(value) => setNewAnnouncement({...newAnnouncement, audience: value})}
                     >
                       <SelectTrigger>
@@ -355,7 +404,7 @@ const AnnouncementsTab: React.FC = () => {
                   <div>
                     <Label>Visibility</Label>
                     <Select 
-                      value={newAnnouncement.visibility} 
+                      value={newAnnouncement.visibility}
                       onValueChange={(value) => setNewAnnouncement({...newAnnouncement, visibility: value})}
                     >
                       <SelectTrigger>
@@ -363,23 +412,21 @@ const AnnouncementsTab: React.FC = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Public">Public</SelectItem>
-                        <SelectItem value="Community">Community Only</SelectItem>
+                        <SelectItem value="Community Only">Community Only</SelectItem>
                         <SelectItem value="Private">Private</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-2">
                   <Checkbox 
-                    id="pinned" 
-                    checked={newAnnouncement.isPinned}
-                    onCheckedChange={(checked) => setNewAnnouncement({...newAnnouncement, isPinned: checked as boolean})}
+                    checked={newAnnouncement.is_pinned}
+                    onCheckedChange={(checked) => 
+                      setNewAnnouncement({...newAnnouncement, is_pinned: checked as boolean})
+                    }
                   />
-                  <Label htmlFor="pinned" className="flex items-center gap-2">
-                    <Pin className="h-4 w-4" />
-                    Pin to top
-                  </Label>
+                  <Label>Pin to top</Label>
                 </div>
               </CardContent>
             </Card>
@@ -387,19 +434,17 @@ const AnnouncementsTab: React.FC = () => {
             {/* Scheduling & Expiry */}
             <Card>
               <CardHeader>
-                <CardTitle>Scheduling & Expiry</CardTitle>
+                <CardTitle className="text-lg">Scheduling & Expiry</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
                   <Label>Expiry Date (Optional)</Label>
                   <Input
                     type="date"
-                    value={newAnnouncement.expiryDate}
-                    onChange={(e) => setNewAnnouncement({...newAnnouncement, expiryDate: e.target.value})}
+                    value={newAnnouncement.expiry_date}
+                    onChange={(e) => setNewAnnouncement({...newAnnouncement, expiry_date: e.target.value})}
                   />
-                  <p className="text-sm text-gray-500 mt-1">
-                    Leave empty for no expiry
-                  </p>
+                  <p className="text-xs text-gray-500 mt-1">Leave empty for no expiry</p>
                 </div>
               </CardContent>
             </Card>
@@ -407,91 +452,89 @@ const AnnouncementsTab: React.FC = () => {
             {/* Notification Settings */}
             <Card>
               <CardHeader>
-                <CardTitle>Notification Settings</CardTitle>
+                <CardTitle className="text-lg">Notification Settings</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="push-notification" 
-                      checked={newAnnouncement.notifications.push}
-                      onCheckedChange={(checked) => setNewAnnouncement({
-                        ...newAnnouncement, 
+              <CardContent className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox 
+                    checked={newAnnouncement.notifications.push}
+                    onCheckedChange={(checked) => 
+                      setNewAnnouncement({
+                        ...newAnnouncement,
                         notifications: {...newAnnouncement.notifications, push: checked as boolean}
-                      })}
-                    />
-                    <Label htmlFor="push-notification" className="flex items-center gap-2">
-                      <Bell className="h-4 w-4" />
-                      Send push notification
-                    </Label>
-                  </div>
+                      })
+                    }
+                  />
+                  <Bell className="h-4 w-4" />
+                  <Label>Send push notification</Label>
+                </div>
 
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="email-notification" 
-                      checked={newAnnouncement.notifications.email}
-                      onCheckedChange={(checked) => setNewAnnouncement({
-                        ...newAnnouncement, 
+                <div className="flex items-center gap-2">
+                  <Checkbox 
+                    checked={newAnnouncement.notifications.email}
+                    onCheckedChange={(checked) => 
+                      setNewAnnouncement({
+                        ...newAnnouncement,
                         notifications: {...newAnnouncement.notifications, email: checked as boolean}
-                      })}
-                    />
-                    <Label htmlFor="email-notification" className="flex items-center gap-2">
-                      <Mail className="h-4 w-4" />
-                      Send email notification
-                    </Label>
-                  </div>
+                      })
+                    }
+                  />
+                  <Mail className="h-4 w-4" />
+                  <Label>Send email notification</Label>
+                </div>
 
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="sms-notification" 
-                      checked={newAnnouncement.notifications.sms}
-                      onCheckedChange={(checked) => setNewAnnouncement({
-                        ...newAnnouncement, 
+                <div className="flex items-center gap-2">
+                  <Checkbox 
+                    checked={newAnnouncement.notifications.sms}
+                    onCheckedChange={(checked) => 
+                      setNewAnnouncement({
+                        ...newAnnouncement,
                         notifications: {...newAnnouncement.notifications, sms: checked as boolean}
-                      })}
-                    />
-                    <Label htmlFor="sms-notification" className="flex items-center gap-2">
-                      <Smartphone className="h-4 w-4" />
-                      Send SMS notification
-                    </Label>
-                  </div>
+                      })
+                    }
+                  />
+                  <Smartphone className="h-4 w-4" />
+                  <Label>Send SMS notification</Label>
+                </div>
 
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="whatsapp-notification" 
-                      checked={newAnnouncement.notifications.whatsapp}
-                      onCheckedChange={(checked) => setNewAnnouncement({
-                        ...newAnnouncement, 
+                <div className="flex items-center gap-2">
+                  <Checkbox 
+                    checked={newAnnouncement.notifications.whatsapp}
+                    onCheckedChange={(checked) => 
+                      setNewAnnouncement({
+                        ...newAnnouncement,
                         notifications: {...newAnnouncement.notifications, whatsapp: checked as boolean}
-                      })}
-                    />
-                    <Label htmlFor="whatsapp-notification" className="flex items-center gap-2">
-                      <MessageCircle className="h-4 w-4" />
-                      Send WhatsApp broadcast
-                    </Label>
-                  </div>
+                      })
+                    }
+                  />
+                  <MessageCircle className="h-4 w-4" />
+                  <Label>Send WhatsApp broadcast</Label>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          <div className="flex justify-between pt-6 border-t">
-            <Button variant="outline" onClick={() => setShowCreateModal(false)}>
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button variant="outline" onClick={() => {
+              setShowCreateModal(false);
+              setIsEditMode(false);
+              setEditingAnnouncement(null);
+            }}>
               Cancel
             </Button>
-            <div className="flex gap-2">
-              <Button variant="outline">
-                Save as Draft
-              </Button>
-              <Button onClick={handleCreateAnnouncement}>
-                Publish Announcement
-              </Button>
-            </div>
+            <Button variant="outline" onClick={handleCreateAnnouncement}>
+              Save as Draft
+            </Button>
+            <Button onClick={handleCreateAnnouncement} className="bg-orange-500 hover:bg-orange-600">
+              {isEditMode ? 'Update Announcement' : 'Publish Announcement'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
     </div>
   );
-};
+});
+
+AnnouncementsTab.displayName = 'AnnouncementsTab';
 
 export default AnnouncementsTab;

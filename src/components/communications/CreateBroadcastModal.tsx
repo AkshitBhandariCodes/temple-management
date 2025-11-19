@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
-	Dialog,
-	DialogContent,
-	DialogHeader,
-	DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,568 +12,566 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-	Users,
-	Mail,
-	Smartphone,
-	Bell,
-	MessageCircle,
-	Calendar,
-	Clock,
-	Send,
-	Eye,
-	TestTube,
-	Loader2,
-	CheckCircle,
+  Users,
+  Mail,
+  Smartphone,
+  Bell,
+  MessageCircle,
+  Calendar,
+  Clock,
+  Send,
+  Eye,
+  TestTube,
+  Loader2,
+  CheckCircle,
 } from "lucide-react";
-import {
-	useSendEmail,
-	useSendBulkEmailToVolunteers,
-	useVolunteers,
-} from "@/hooks/use-complete-api";
-import { useToast } from "@/hooks/use-toast";
+import { supabase } from '@/lib/supabaseClient';
+import { toast } from 'sonner';
 
 interface CreateBroadcastModalProps {
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
 }
 
 const CreateBroadcastModal: React.FC<CreateBroadcastModalProps> = ({
-	open,
-	onOpenChange,
+  open,
+  onOpenChange,
+  onSuccess,
 }) => {
-	const [activeTab, setActiveTab] = useState("audience");
-	const [selectedAudience, setSelectedAudience] = useState("");
-	const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
-	const [messageContent, setMessageContent] = useState("");
-	const [subject, setSubject] = useState("");
-	const [schedulingOption, setSchedulingOption] = useState("immediate");
-	const [senderEmail, setSenderEmail] = useState("admin@temple.com");
-	const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("audience");
+  const [selectedAudience, setSelectedAudience] = useState("");
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
+  const [messageContent, setMessageContent] = useState("");
+  const [subject, setSubject] = useState("");
+  const [schedulingOption, setSchedulingOption] = useState("immediate");
+  const [senderEmail, setSenderEmail] = useState("admin@temple.com");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingRecipients, setIsFetchingRecipients] = useState(false);
+  const [recipients, setRecipients] = useState<any[]>([]);
 
-	const { toast } = useToast();
-	const sendEmailMutation = useSendEmail();
-	const sendBulkEmailMutation = useSendBulkEmailToVolunteers();
+  // Fetch recipients from demo_user_profiles based on role
+  useEffect(() => {
+    if (open && selectedAudience) {
+      fetchRecipients();
+    }
+  }, [open, selectedAudience]);
 
-	// Fetch data for audience selection
-	const { data: volunteersData } = useVolunteers({ limit: 1000 });
+  const fetchRecipients = async () => {
+    setIsFetchingRecipients(true);
+    try {
+      let query = supabase
+        .from('demo_user_profiles')  // ✅ Changed to demo table
+        .select('id, full_name, email, phone, role');  // ✅ Changed 'name' to 'full_name'
 
-	const volunteers = volunteersData?.data || [];
+      // Filter by role if not "all"
+      if (selectedAudience !== 'all' && selectedAudience !== '' && selectedAudience !== 'custom') {
+        query = query.eq('role', selectedAudience);
+      }
 
-	const audienceTypes = [
-		{
-			id: "volunteers",
-			name: "Volunteers",
-			count: volunteers.length,
-			description: "Registered volunteers",
-		},
-		{
-			id: "all",
-			name: "All Users",
-			count: volunteers.length,
-			description: "All registered users",
-		},
-		{
-			id: "custom",
-			name: "Custom Segment",
-			count: 0,
-			description: "Manually selected users",
-		},
-	];
+      const { data, error } = await query;
 
-	const channels = [
-		{ id: "email", name: "Email", icon: Mail, description: "Rich HTML emails" },
-		{
-			id: "sms",
-			name: "SMS",
-			icon: Smartphone,
-			description: "Text messages (160 chars)",
-		},
-		{
-			id: "push",
-			name: "Push Notification",
-			icon: Bell,
-			description: "Mobile app notifications",
-		},
-		{
-			id: "whatsapp",
-			name: "WhatsApp",
-			icon: MessageCircle,
-			description: "WhatsApp messages",
-		},
-	];
+      if (error) {
+        console.error('Error fetching recipients:', error);
+        toast.error('Failed to load recipients');
+        setRecipients([]);
+        return;
+      }
 
-	const handleChannelToggle = (channelId: string) => {
-		setSelectedChannels((prev) =>
-			prev.includes(channelId)
-				? prev.filter((id) => id !== channelId)
-				: [...prev, channelId]
-		);
-	};
+      // Map full_name to name for consistency
+      const mappedRecipients = (data || []).map(user => ({
+        id: user.id,
+        name: user.full_name,  // ✅ Map full_name to name
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+      }));
 
-	const getEstimatedReach = () => {
-		const audience = audienceTypes.find((a) => a.id === selectedAudience);
-		return audience ? audience.count : 0;
-	};
+      setRecipients(mappedRecipients);
+      console.log(`✅ Loaded ${mappedRecipients.length} recipients for role: ${selectedAudience}`);
+      
+    } catch (error) {
+      console.error('Error:', error);
+      toast.error('Failed to load recipients');
+      setRecipients([]);
+    } finally {
+      setIsFetchingRecipients(false);
+    }
+  };
 
-	const getRecipientEmails = () => {
-		switch (selectedAudience) {
-			case "volunteers":
-			case "all":
-				return volunteers.map((v) => v.email).filter(Boolean);
-			default:
-				return [];
-		}
-	};
+  const audienceTypes = [
+    {
+      id: "volunteers",
+      name: "Volunteers",
+      count: recipients.filter(r => r.role === 'volunteers').length,
+      description: "Registered volunteers",
+    },
+    {
+      id: "all",
+      name: "All Users",
+      count: recipients.length,
+      description: "All registered users",
+    },
+    {
+      id: "community_member",
+      name: "Community Members",
+      count: recipients.filter(r => r.role === 'community_member').length,
+      description: "Temple community members",
+    },
+    {
+      id: "donor",
+      name: "Donors",
+      count: recipients.filter(r => r.role === 'donor').length,
+      description: "Active donors",
+    },
+    {
+      id: "priest",
+      name: "Priests",
+      count: recipients.filter(r => r.role === 'priest').length,
+      description: "Temple priests",
+    },
+    {
+      id: "devotee",
+      name: "Devotees",
+      count: recipients.filter(r => r.role === 'devotee').length,
+      description: "Regular devotees",
+    },
+    {
+      id: "event_organizer",
+      name: "Event Organizers",
+      count: recipients.filter(r => r.role === 'event_organizer').length,
+      description: "Event coordinators",
+    },
+    {
+      id: "admin",
+      name: "Administrators",
+      count: recipients.filter(r => r.role === 'admin').length,
+      description: "System administrators",
+    },
+    {
+      id: "custom",
+      name: "Custom Segment",
+      count: 0,
+      description: "Manually selected users",
+    },
+  ];
 
-	const handleSendEmail = async () => {
-		if (
-			!selectedAudience ||
-			!subject ||
-			!messageContent ||
-			selectedChannels.length === 0
-		) {
-			toast({
-				title: "Missing Information",
-				description:
-					"Please select audience, enter subject, message content, and choose at least one channel.",
-				variant: "destructive",
-			});
-			return;
-		}
+  const channels = [
+    { id: "email", name: "Email", icon: Mail, description: "Rich HTML emails" },
+    {
+      id: "sms",
+      name: "SMS",
+      icon: Smartphone,
+      description: "Text messages (160 chars)",
+    },
+    {
+      id: "push",
+      name: "Push Notification",
+      icon: Bell,
+      description: "Mobile app notifications",
+    },
+    {
+      id: "whatsapp",
+      name: "WhatsApp",
+      icon: MessageCircle,
+      description: "WhatsApp messages",
+    },
+  ];
 
-		if (!selectedChannels.includes("email")) {
-			toast({
-				title: "Email Channel Required",
-				description: "Please select email as a communication channel.",
-				variant: "destructive",
-			});
-			return;
-		}
+  const handleChannelToggle = (channelId: string) => {
+    setSelectedChannels((prev) =>
+      prev.includes(channelId)
+        ? prev.filter((id) => id !== channelId)
+        : [...prev, channelId]
+    );
+  };
 
-		setIsLoading(true);
+  const getEstimatedReach = () => {
+    const audience = audienceTypes.find((a) => a.id === selectedAudience);
+    return audience ? audience.count : 0;
+  };
 
-		try {
-			const recipientEmails = getRecipientEmails();
+  const getRecipientEmails = () => {
+    return recipients.map(r => r.email).filter(Boolean);
+  };
 
-			if (recipientEmails.length === 0) {
-				toast({
-					title: "No Recipients",
-					description: "No email addresses found for the selected audience.",
-					variant: "destructive",
-				});
-				setIsLoading(false);
-				return;
-			}
+  const handleSaveAsDraft = async () => {
+    setIsLoading(true);
+    try {
+      const broadcast = {
+        subject,
+        content: messageContent,
+        channel: selectedChannels[0] || 'email',
+        audience: selectedAudience,
+        status: 'draft',
+        total_recipients: recipients.length,
+        sent_count: 0,
+        failed_count: 0,
+        created_at: new Date().toISOString(),
+      };
 
-			// Send email based on audience type
-			if (selectedAudience === "volunteers") {
-				await sendBulkEmailMutation.mutateAsync({
-					sender_email: senderEmail,
-					volunteer_filter: {},
-					subject: subject,
-					content: messageContent,
-				});
-			} else {
-				await sendEmailMutation.mutateAsync({
-					sender_email: senderEmail,
-					recipient_emails: recipientEmails,
-					subject: subject,
-					content: messageContent,
-					scheduled_at:
-						schedulingOption === "scheduled"
-							? new Date().toISOString()
-							: undefined,
-				});
-			}
+      const { error } = await supabase.from('broadcasts').insert([broadcast]);
 
-			toast({
-				title: "Email Sent Successfully!",
-				description: `Email sent to ${recipientEmails.length} recipients.`,
-			});
+      if (error) throw error;
 
-			// Reset form and close modal
-			setSelectedAudience("");
-			setSelectedChannels([]);
-			setSubject("");
-			setMessageContent("");
-			setSchedulingOption("immediate");
-			onOpenChange(false);
-		} catch (error) {
-			console.error("Error sending email:", error);
-			toast({
-				title: "Failed to Send Email",
-				description: "There was an error sending the email. Please try again.",
-				variant: "destructive",
-			});
-		} finally {
-			setIsLoading(false);
-		}
-	};
+      toast.success('Broadcast saved as draft');
+      onOpenChange(false);
+      if (onSuccess) onSuccess();
+      resetForm();
+    } catch (error) {
+      console.error('Error saving draft:', error);
+      toast.error('Failed to save draft');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-				<DialogHeader>
-					<DialogTitle>Create New Broadcast</DialogTitle>
-				</DialogHeader>
+  const handleSendEmail = async () => {
+    if (
+      !selectedAudience ||
+      !subject ||
+      !messageContent ||
+      selectedChannels.length === 0
+    ) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
 
-				<Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-					<TabsList className="grid w-full grid-cols-3">
-						<TabsTrigger value="audience">Audience Selection</TabsTrigger>
-						<TabsTrigger value="content">Message Content</TabsTrigger>
-						<TabsTrigger value="scheduling">Scheduling</TabsTrigger>
-					</TabsList>
+    if (!selectedChannels.includes("email")) {
+      toast.error("Email channel is required for now");
+      return;
+    }
 
-					<TabsContent value="audience" className="space-y-6">
-						<div>
-							<h3 className="text-lg font-semibold mb-4">
-								Select Target Audience
-							</h3>
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-								{audienceTypes.map((audience) => (
-									<Card
-										key={audience.id}
-										className={`cursor-pointer transition-colors ${
-											selectedAudience === audience.id
-												? "ring-2 ring-blue-500 bg-blue-50"
-												: "hover:bg-gray-50"
-										}`}
-										onClick={() => setSelectedAudience(audience.id)}>
-										<CardContent className="p-4">
-											<div className="flex items-center justify-between mb-2">
-												<h4 className="font-medium">{audience.name}</h4>
-												<Badge variant="outline">
-													<Users className="h-3 w-3 mr-1" />
-													{audience.count.toLocaleString()}
-												</Badge>
-											</div>
-											<p className="text-sm text-gray-600">
-												{audience.description}
-											</p>
-										</CardContent>
-									</Card>
-								))}
-							</div>
-						</div>
+    setIsLoading(true);
+    try {
+      const recipientEmails = getRecipientEmails();
+      if (recipientEmails.length === 0) {
+        toast.error("No recipients found");
+        setIsLoading(false);
+        return;
+      }
 
-						{selectedAudience && (
-							<div>
-								<h3 className="text-lg font-semibold mb-4">Audience Filters</h3>
-								<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-									<div>
-										<Label>Location</Label>
-										<Select>
-											<SelectTrigger>
-												<SelectValue placeholder="All locations" />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectItem value="all">All locations</SelectItem>
-												<SelectItem value="local">Local area</SelectItem>
-												<SelectItem value="regional">Regional</SelectItem>
-											</SelectContent>
-										</Select>
-									</div>
-									<div>
-										<Label>Engagement Level</Label>
-										<Select>
-											<SelectTrigger>
-												<SelectValue placeholder="All levels" />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectItem value="all">All levels</SelectItem>
-												<SelectItem value="high">High engagement</SelectItem>
-												<SelectItem value="medium">
-													Medium engagement
-												</SelectItem>
-												<SelectItem value="low">Low engagement</SelectItem>
-											</SelectContent>
-										</Select>
-									</div>
-									<div>
-										<Label>Subscription Status</Label>
-										<Select>
-											<SelectTrigger>
-												<SelectValue placeholder="All subscribers" />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectItem value="all">All subscribers</SelectItem>
-												<SelectItem value="active">Active only</SelectItem>
-												<SelectItem value="inactive">Inactive only</SelectItem>
-											</SelectContent>
-										</Select>
-									</div>
-								</div>
-							</div>
-						)}
+      // Create broadcast record
+      const broadcast = {
+        subject,
+        content: messageContent,
+        channel: 'email',
+        audience: selectedAudience,
+        status: schedulingOption === 'scheduled' ? 'scheduled' : 'sending',
+        total_recipients: recipientEmails.length,
+        sent_count: 0,
+        failed_count: 0,
+        created_at: new Date().toISOString(),
+      };
 
-						<Card>
-							<CardHeader>
-								<CardTitle>Audience Preview</CardTitle>
-							</CardHeader>
-							<CardContent>
-								<div className="flex items-center justify-between">
-									<div>
-										<p className="text-2xl font-bold">
-											{getEstimatedReach().toLocaleString()}
-										</p>
-										<p className="text-sm text-gray-600">
-											Estimated recipients
-										</p>
-									</div>
-									<Button variant="outline">
-										<Eye className="h-4 w-4 mr-2" />
-										Preview Recipients
-									</Button>
-								</div>
-							</CardContent>
-						</Card>
-					</TabsContent>
+      const { data: broadcastData, error: broadcastError } = await supabase
+        .from('broadcasts')
+        .insert([broadcast])
+        .select()
+        .single();
 
-					<TabsContent value="content" className="space-y-6">
-						<div>
-							<h3 className="text-lg font-semibold mb-4">
-								Select Communication Channels
-							</h3>
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-								{channels.map((channel) => {
-									const Icon = channel.icon;
-									return (
-										<Card
-											key={channel.id}
-											className={`cursor-pointer transition-colors ${
-												selectedChannels.includes(channel.id)
-													? "ring-2 ring-blue-500 bg-blue-50"
-													: "hover:bg-gray-50"
-											}`}
-											onClick={() => handleChannelToggle(channel.id)}>
-											<CardContent className="p-4">
-												<div className="flex items-center space-x-3">
-													<Icon className="h-5 w-5" />
-													<div>
-														<h4 className="font-medium">{channel.name}</h4>
-														<p className="text-sm text-gray-600">
-															{channel.description}
-														</p>
-													</div>
-												</div>
-											</CardContent>
-										</Card>
-									);
-								})}
-							</div>
-						</div>
+      if (broadcastError) throw broadcastError;
 
-						{selectedChannels.length > 0 && (
-							<div className="space-y-4">
-								<div>
-									<Label htmlFor="sender">Sender Email</Label>
-									<Input
-										id="sender"
-										type="email"
-										value={senderEmail}
-										onChange={(e) => setSenderEmail(e.target.value)}
-										placeholder="Enter sender email..."
-									/>
-								</div>
+      // Send emails via API
+      let sentCount = 0;
+      let failedCount = 0;
 
-								<div>
-									<Label htmlFor="subject">Subject Line</Label>
-									<Input
-										id="subject"
-										value={subject}
-										onChange={(e) => setSubject(e.target.value)}
-										placeholder="Enter subject line..."
-									/>
-								</div>
+      for (const email of recipientEmails) {
+        try {
+          const response = await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: email,
+              subject: subject,
+              content: messageContent,
+            }),
+          });
 
-								<div>
-									<Label htmlFor="content">Message Content</Label>
-									<Textarea
-										id="content"
-										value={messageContent}
-										onChange={(e) => setMessageContent(e.target.value)}
-										placeholder="Enter your message content..."
-										rows={8}
-									/>
-									<p className="text-sm text-gray-500 mt-1">
-										You can use personalization tokens like {{ name }},{" "}
-										{{ community }}
-									</p>
-								</div>
+          if (response.ok) {
+            sentCount++;
+          } else {
+            failedCount++;
+          }
+        } catch {
+          failedCount++;
+        }
+      }
 
-								<div className="flex gap-2">
-									<Button variant="outline">
-										<Eye className="h-4 w-4 mr-2" />
-										Preview
-									</Button>
-									<Button variant="outline">
-										<TestTube className="h-4 w-4 mr-2" />
-										Test Send
-									</Button>
-								</div>
-							</div>
-						)}
-					</TabsContent>
+      // Update broadcast status
+      await supabase
+        .from('broadcasts')
+        .update({
+          status: 'completed',
+          sent_count: sentCount,
+          failed_count: failedCount,
+        })
+        .eq('id', broadcastData.id);
 
-					<TabsContent value="scheduling" className="space-y-6">
-						<div>
-							<h3 className="text-lg font-semibold mb-4">Delivery Options</h3>
-							<div className="space-y-4">
-								<div className="flex items-center space-x-2">
-									<Checkbox
-										id="immediate"
-										checked={schedulingOption === "immediate"}
-										onCheckedChange={() => setSchedulingOption("immediate")}
-									/>
-									<Label
-										htmlFor="immediate"
-										className="flex items-center gap-2">
-										<Send className="h-4 w-4" />
-										Send immediately
-									</Label>
-								</div>
+      toast.success(`Email sent to ${sentCount} recipients!`);
+      resetForm();
+      onOpenChange(false);
+      if (onSuccess) onSuccess();
+    } catch (error) {
+      console.error("Error sending email:", error);
+      toast.error("Failed to send email");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-								<div className="flex items-center space-x-2">
-									<Checkbox
-										id="scheduled"
-										checked={schedulingOption === "scheduled"}
-										onCheckedChange={() => setSchedulingOption("scheduled")}
-									/>
-									<Label
-										htmlFor="scheduled"
-										className="flex items-center gap-2">
-										<Calendar className="h-4 w-4" />
-										Schedule for later
-									</Label>
-								</div>
+  const resetForm = () => {
+    setSelectedAudience("");
+    setSelectedChannels([]);
+    setSubject("");
+    setMessageContent("");
+    setSchedulingOption("immediate");
+    setRecipients([]);
+  };
 
-								{schedulingOption === "scheduled" && (
-									<div className="ml-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-										<div>
-											<Label>Date</Label>
-											<Input type="date" />
-										</div>
-										<div>
-											<Label>Time</Label>
-											<Input type="time" />
-										</div>
-									</div>
-								)}
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Create New Broadcast</DialogTitle>
+        </DialogHeader>
 
-								<div className="flex items-center space-x-2">
-									<Checkbox
-										id="recurring"
-										checked={schedulingOption === "recurring"}
-										onCheckedChange={() => setSchedulingOption("recurring")}
-									/>
-									<Label
-										htmlFor="recurring"
-										className="flex items-center gap-2">
-										<Clock className="h-4 w-4" />
-										Recurring schedule
-									</Label>
-								</div>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="audience">Audience Selection</TabsTrigger>
+            <TabsTrigger value="message">Message Content</TabsTrigger>
+            <TabsTrigger value="scheduling">Scheduling</TabsTrigger>
+          </TabsList>
 
-								{schedulingOption === "recurring" && (
-									<div className="ml-6">
-										<Label>Frequency</Label>
-										<Select>
-											<SelectTrigger>
-												<SelectValue placeholder="Select frequency" />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectItem value="daily">Daily</SelectItem>
-												<SelectItem value="weekly">Weekly</SelectItem>
-												<SelectItem value="monthly">Monthly</SelectItem>
-											</SelectContent>
-										</Select>
-									</div>
-								)}
-							</div>
-						</div>
+          {/* Audience Tab */}
+          <TabsContent value="audience" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Select Target Audience</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {audienceTypes.map((audience) => (
+                  <div
+                    key={audience.id}
+                    className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                      selectedAudience === audience.id
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                    onClick={() => setSelectedAudience(audience.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-semibold">{audience.name}</h4>
+                        <p className="text-sm text-gray-600">
+                          {audience.description}
+                        </p>
+                      </div>
+                      <Badge variant="secondary">
+                        {isFetchingRecipients ? '...' : audience.count.toLocaleString()}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
 
-						<Card>
-							<CardHeader>
-								<CardTitle>Delivery Settings</CardTitle>
-							</CardHeader>
-							<CardContent className="space-y-4">
-								<div>
-									<Label>Batch Size</Label>
-									<Select>
-										<SelectTrigger>
-											<SelectValue placeholder="Select batch size" />
-										</SelectTrigger>
-										<SelectContent>
-											<SelectItem value="100">100 messages/batch</SelectItem>
-											<SelectItem value="500">500 messages/batch</SelectItem>
-											<SelectItem value="1000">1000 messages/batch</SelectItem>
-										</SelectContent>
-									</Select>
-								</div>
+            {selectedAudience && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Audience Preview</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-4">
+                    <Users className="h-8 w-8 text-blue-600" />
+                    <div>
+                      <p className="text-3xl font-bold">
+                        {isFetchingRecipients ? (
+                          <Loader2 className="h-6 w-6 animate-spin inline" />
+                        ) : (
+                          getEstimatedReach().toLocaleString()
+                        )}
+                      </p>
+                      <p className="text-sm text-gray-600">Estimated recipients</p>
+                    </div>
+                  </div>
+                  <Button className="mt-4" variant="outline">
+                    <Eye className="h-4 w-4 mr-2" />
+                    Preview Recipients
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
 
-								<div>
-									<Label>Delivery Speed</Label>
-									<Select>
-										<SelectTrigger>
-											<SelectValue placeholder="Select delivery speed" />
-										</SelectTrigger>
-										<SelectContent>
-											<SelectItem value="slow">Slow (1 batch/hour)</SelectItem>
-											<SelectItem value="medium">
-												Medium (1 batch/15min)
-											</SelectItem>
-											<SelectItem value="fast">Fast (1 batch/5min)</SelectItem>
-										</SelectContent>
-									</Select>
-								</div>
-							</CardContent>
-						</Card>
-					</TabsContent>
-				</Tabs>
+          {/* Message Content Tab */}
+          <TabsContent value="message" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Select Communication Channels</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 gap-4">
+                {channels.map((channel) => {
+                  const Icon = channel.icon;
+                  return (
+                    <div
+                      key={channel.id}
+                      className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                        selectedChannels.includes(channel.id)
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                      onClick={() => handleChannelToggle(channel.id)}
+                    >
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          checked={selectedChannels.includes(channel.id)}
+                          onCheckedChange={() => handleChannelToggle(channel.id)}
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Icon className="h-4 w-4" />
+                            <span className="font-semibold">{channel.name}</span>
+                          </div>
+                          <p className="text-xs text-gray-600">
+                            {channel.description}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
 
-				<div className="flex justify-between pt-6 border-t">
-					<Button variant="outline" onClick={() => onOpenChange(false)}>
-						Cancel
-					</Button>
-					<div className="flex gap-2">
-						<Button variant="outline">Save as Draft</Button>
-						<Button
-							onClick={handleSendEmail}
-							disabled={
-								isLoading ||
-								!selectedAudience ||
-								!subject ||
-								!messageContent ||
-								selectedChannels.length === 0
-							}>
-							{isLoading ? (
-								<>
-									<Loader2 className="w-4 h-4 mr-2 animate-spin" />
-									Sending...
-								</>
-							) : (
-								<>
-									<Send className="w-4 h-4 mr-2" />
-									{schedulingOption === "immediate"
-										? "Send Now"
-										: "Schedule Broadcast"}
-								</>
-							)}
-						</Button>
-					</div>
-				</div>
-			</DialogContent>
-		</Dialog>
-	);
+            {selectedChannels.length > 0 && (
+              <Card>
+                <CardContent className="space-y-4 pt-6">
+                  <div>
+                    <Label>Sender Email</Label>
+                    <Input
+                      value={senderEmail}
+                      onChange={(e) => setSenderEmail(e.target.value)}
+                      placeholder="Enter sender email..."
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Subject Line</Label>
+                    <Input
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      placeholder="Enter subject line..."
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Message Content</Label>
+                    <Textarea
+                      value={messageContent}
+                      onChange={(e) => setMessageContent(e.target.value)}
+                      placeholder="Enter your message content..."
+                      rows={8}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      You can use personalization tokens like {`{{ name }}`}, {`{{ community }}`}
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button variant="outline">
+                      <Eye className="h-4 w-4 mr-2" />
+                      Preview
+                    </Button>
+                    <Button variant="outline">
+                      <TestTube className="h-4 w-4 mr-2" />
+                      Test Send
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* Scheduling Tab */}
+          <TabsContent value="scheduling" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Delivery Options</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="immediate"
+                    checked={schedulingOption === "immediate"}
+                    onCheckedChange={() => setSchedulingOption("immediate")}
+                  />
+                  <label htmlFor="immediate">Send immediately</label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="scheduled"
+                    checked={schedulingOption === "scheduled"}
+                    onCheckedChange={() => setSchedulingOption("scheduled")}
+                  />
+                  <label htmlFor="scheduled">Schedule for later</label>
+                </div>
+
+                {schedulingOption === "scheduled" && (
+                  <div className="grid grid-cols-2 gap-4 ml-6">
+                    <div>
+                      <Label>Date</Label>
+                      <Input type="date" />
+                    </div>
+                    <div>
+                      <Label>Time</Label>
+                      <Input type="time" />
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        <div className="flex justify-between pt-4 border-t">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleSaveAsDraft} disabled={isLoading}>
+              Save as Draft
+            </Button>
+            <Button onClick={handleSendEmail} disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  {schedulingOption === "immediate"
+                    ? "Send Now"
+                    : "Schedule Broadcast"}
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 };
 
 export default CreateBroadcastModal;

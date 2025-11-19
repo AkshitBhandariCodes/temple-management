@@ -1,6 +1,6 @@
 export { default as CommunicationsManagement } from './CommunicationsManagement';
 export { default as DashboardTab } from './DashboardTab';
-export { default as BroadcastsTab } from './BroadcastsTab';
+export { default as BroadcastsTab } from './BroadcastsTab-new';
 export { default as BrochuresTab } from './BrochuresTab';
 export { default as AnnouncementsTab } from './AnnouncementsTab';
 export { default as TemplatesTab } from './TemplatesTab';

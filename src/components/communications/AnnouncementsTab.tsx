@@ -9,19 +9,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Megaphone, Pin, Eye, Edit, Trash2, Plus, Calendar, Users,
-  Bell, Mail, Smartphone, MessageCircle, Clock, AlertCircle
+  Bell, Mail, Smartphone, MessageCircle, Clock, AlertCircle, Loader2
 } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 
 const AnnouncementsTab = forwardRef((props, ref) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
-  
-  // ✅ NEW: Add edit state
   const [editingAnnouncement, setEditingAnnouncement] = useState<any>(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   
   const [newAnnouncement, setNewAnnouncement] = useState({
     title: '',
@@ -101,7 +100,6 @@ const AnnouncementsTab = forwardRef((props, ref) => {
     );
   };
 
-  // ✅ NEW: Handle edit click
   const handleEdit = (announcement: any) => {
     setEditingAnnouncement(announcement);
     setIsEditMode(true);
@@ -124,6 +122,96 @@ const AnnouncementsTab = forwardRef((props, ref) => {
     setShowCreateModal(true);
   };
 
+  // ✅ NEW: Function to send notifications via backend
+  const sendNotifications = async (announcementData: any) => {
+    const { notifications, title, content, audience } = announcementData;
+    
+    // Fetch recipients based on audience
+    let recipientsQuery = supabase.from('users').select('id, name, email, phone');
+    
+    if (audience === 'Community Members') {
+      recipientsQuery = recipientsQuery.eq('role', 'member');
+    } else if (audience === 'Volunteers') {
+      recipientsQuery = recipientsQuery.eq('role', 'volunteer');
+    } else if (audience === 'Donors') {
+      recipientsQuery = recipientsQuery.eq('is_donor', true);
+    }
+    
+    const { data: recipients, error } = await recipientsQuery;
+    
+    if (error || !recipients || recipients.length === 0) {
+      console.error('No recipients found');
+      return;
+    }
+
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+    try {
+      // Send Email Notifications
+      if (notifications.email) {
+        await fetch(`${API_URL}/send-broadcast`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            channel: 'email',
+            recipients: recipients.map(r => ({ name: r.name, email: r.email })),
+            subject: `📢 ${title}`,
+            content: content,
+          }),
+        });
+      }
+
+      // Send SMS Notifications
+      if (notifications.sms) {
+        await fetch(`${API_URL}/send-broadcast`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            channel: 'sms',
+            recipients: recipients.map(r => ({ name: r.name, phone: r.phone })),
+            content: `${title}\n\n${content}`,
+          }),
+        });
+      }
+
+      // Send Push Notifications
+      if (notifications.push) {
+        // Use browser push notification API or your push service
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(title, {
+            body: content,
+            icon: '/temple-icon.png',
+          });
+        }
+        
+        // Also send via backend to all registered devices
+        await fetch(`${API_URL}/send-push-notification`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipients: recipients.map(r => r.id),
+            title: title,
+            body: content,
+          }),
+        });
+      }
+
+      // Send WhatsApp Notifications (if you have Twilio WhatsApp setup)
+      if (notifications.whatsapp) {
+        await fetch(`${API_URL}/send-whatsapp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipients: recipients.map(r => ({ name: r.name, phone: r.phone })),
+            message: `*${title}*\n\n${content}`,
+          }),
+        });
+      }
+    } catch (error) {
+      console.error('Error sending notifications:', error);
+    }
+  };
+
   const handleCreateAnnouncement = async () => {
     if (!newAnnouncement.title.trim()) {
       toast.error('Please enter a title');
@@ -135,9 +223,11 @@ const AnnouncementsTab = forwardRef((props, ref) => {
       return;
     }
 
+    setIsSending(true);
+
     try {
       if (isEditMode && editingAnnouncement) {
-        // ✅ UPDATE existing announcement
+        // UPDATE existing announcement
         const { error } = await supabase
           .from('announcements')
           .update({
@@ -148,6 +238,11 @@ const AnnouncementsTab = forwardRef((props, ref) => {
 
         if (error) throw error;
         toast.success('Announcement updated successfully');
+        
+        // Send notifications if enabled
+        if (Object.values(newAnnouncement.notifications).some(v => v)) {
+          await sendNotifications(newAnnouncement);
+        }
       } else {
         // CREATE new announcement
         const announcement = {
@@ -158,12 +253,22 @@ const AnnouncementsTab = forwardRef((props, ref) => {
           created_by: 'Current User'
         };
 
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('announcements')
-          .insert([announcement]);
+          .insert([announcement])
+          .select()
+          .single();
 
         if (error) throw error;
+        
         toast.success('Announcement created successfully');
+        
+        // ✅ Send notifications if any are enabled
+        if (Object.values(newAnnouncement.notifications).some(v => v)) {
+          toast.info('Sending notifications...');
+          await sendNotifications(newAnnouncement);
+          toast.success('Notifications sent!');
+        }
       }
 
       // Reset form
@@ -183,9 +288,12 @@ const AnnouncementsTab = forwardRef((props, ref) => {
       setIsEditMode(false);
       setEditingAnnouncement(null);
       fetchAnnouncements();
+
     } catch (error: any) {
       console.error('Error:', error);
       toast.error(error.message || 'Operation failed');
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -253,7 +361,6 @@ const AnnouncementsTab = forwardRef((props, ref) => {
                     >
                       <Pin className="h-4 w-4" />
                     </Button>
-                    {/* ✅ EDIT BUTTON */}
                     <Button 
                       size="sm" 
                       variant="ghost"
@@ -515,18 +622,32 @@ const AnnouncementsTab = forwardRef((props, ref) => {
           </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button variant="outline" onClick={() => {
-              setShowCreateModal(false);
-              setIsEditMode(false);
-              setEditingAnnouncement(null);
-            }}>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowCreateModal(false);
+                setIsEditMode(false);
+                setEditingAnnouncement(null);
+              }}
+              disabled={isSending}
+            >
               Cancel
             </Button>
-            <Button variant="outline" onClick={handleCreateAnnouncement}>
-              Save as Draft
-            </Button>
-            <Button onClick={handleCreateAnnouncement} className="bg-orange-500 hover:bg-orange-600">
-              {isEditMode ? 'Update Announcement' : 'Publish Announcement'}
+            <Button 
+              onClick={handleCreateAnnouncement}
+              className="bg-orange-500 hover:bg-orange-600"
+              disabled={isSending}
+            >
+              {isSending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Publishing...
+                </>
+              ) : (
+                <>
+                  {isEditMode ? 'Update Announcement' : 'Publish Announcement'}
+                </>
+              )}
             </Button>
           </div>
         </DialogContent>

@@ -1,24 +1,37 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import {
-  Play, Pause, Square, Eye, Copy, BarChart3, Mail, Smartphone, Bell, 
-  MessageCircle, Users, Send, Calendar, Filter, Loader2, Plus, Trash2
+  Send, Users, Mail, Smartphone, MessageCircle, Plus,
+  Calendar, Eye, Loader2, CheckCircle, XCircle
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import CreateBroadcastModal from './CreateBroadcastModal';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 
 const BroadcastsTab = forwardRef((props, ref) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [selectedBroadcast, setSelectedBroadcast] = useState<any>(null);
-  const [broadcastsData, setBroadcastsData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<any>(null);
+  const [broadcasts, setBroadcasts] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+
+  // Form state
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastSubject, setBroadcastSubject] = useState('');
+  const [broadcastContent, setBroadcastContent] = useState('');
+  const [selectedChannel, setSelectedChannel] = useState('email');
+  const [selectedAudience, setSelectedAudience] = useState('all');
+  const [scheduledDate, setScheduledDate] = useState('');
+  
+  // Recipient selection
+  const [allRecipients, setAllRecipients] = useState<any[]>([]);
+  const [selectedRecipients, setSelectedRecipients] = useState<any[]>([]);
 
   useImperativeHandle(ref, () => ({
     openCreateModal: () => {
@@ -26,42 +39,15 @@ const BroadcastsTab = forwardRef((props, ref) => {
     }
   }));
 
-  // Fetch broadcasts from database
-  const fetchBroadcasts = async () => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('broadcasts')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        setError(error);
-        toast.error('Failed to load broadcasts');
-        console.error('Supabase error:', error);
-      } else {
-        setBroadcastsData({ data });
-        setError(null);
-      }
-    } catch (err) {
-      console.error('Error fetching broadcasts:', err);
-      setError(err);
-      toast.error('Failed to load broadcasts');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Real-time subscription
   useEffect(() => {
     fetchBroadcasts();
+    fetchRecipients();
 
     const channel = supabase
       .channel('broadcasts-changes')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'broadcasts' }, 
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'broadcasts' },
         () => {
-          console.log('Broadcast changed, refetching...');
           fetchBroadcasts();
         }
       )
@@ -72,122 +58,183 @@ const BroadcastsTab = forwardRef((props, ref) => {
     };
   }, []);
 
-  const activeBroadcasts = broadcastsData?.data?.filter(b =>
-    b.status === 'sending' || b.status === 'scheduled'
-  ) || [];
-
-  const completedBroadcasts = broadcastsData?.data?.filter(b =>
-    b.status === 'sent' || b.status === 'completed' || b.status === 'paused' || b.status === 'draft'
-  ) || [];
-
-  // Action Handlers
-  const handlePause = async (broadcast: any) => {
+  const fetchBroadcasts = async () => {
+    setIsLoading(true);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('broadcasts')
-        .update({ status: 'paused' })
-        .eq('id', broadcast.id);
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
-      toast.success('Broadcast paused successfully');
-      fetchBroadcasts();
+      setBroadcasts(data || []);
     } catch (error) {
-      console.error('Error pausing broadcast:', error);
-      toast.error('Failed to pause broadcast');
+      console.error('Error fetching broadcasts:', error);
+      toast.error('Failed to load broadcasts');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleResume = async (broadcast: any) => {
+  const fetchRecipients = async () => {
     try {
-      const { error } = await supabase
-        .from('broadcasts')
-        .update({ status: 'sending' })
-        .eq('id', broadcast.id);
+      // Fetch from your users/members table
+      const { data, error } = await supabase
+        .from('users') // or 'members' depending on your table name
+        .select('id, name, email, phone');
 
       if (error) throw error;
-      toast.success('Broadcast resumed successfully');
-      fetchBroadcasts();
+      setAllRecipients(data || []);
     } catch (error) {
-      console.error('Error resuming broadcast:', error);
-      toast.error('Failed to resume broadcast');
+      console.error('Error fetching recipients:', error);
     }
   };
 
-  const handleView = (broadcast: any) => {
-    setSelectedBroadcast(broadcast);
-    setShowPreviewModal(true);
-  };
-
-  const handleCopy = async (broadcast: any) => {
-    try {
-      const newBroadcast = {
-        subject: `${broadcast.subject} (Copy)`,
-        content: broadcast.content,
-        channel: broadcast.channel,
-        audience: broadcast.audience,
-        status: 'draft',
-        total_recipients: broadcast.total_recipients,
-        sent_count: 0,
-        failed_count: 0,
-        opened_count: 0,
-        clicked_count: 0,
-        created_at: new Date().toISOString(),
-      };
-
-      const { error } = await supabase
-        .from('broadcasts')
-        .insert([newBroadcast]);
-
-      if (error) throw error;
-      toast.success('Broadcast copied successfully');
-      fetchBroadcasts();
-    } catch (error) {
-      console.error('Error copying broadcast:', error);
-      toast.error('Failed to copy broadcast');
+  const handleAudienceChange = (audience: string) => {
+    setSelectedAudience(audience);
+    
+    if (audience === 'all') {
+      setSelectedRecipients(allRecipients);
+    } else {
+      // Filter based on audience type
+      setSelectedRecipients(allRecipients); // Customize filtering logic
     }
   };
 
-  const handleDelete = async (broadcast: any) => {
-    if (!confirm('Are you sure you want to delete this broadcast?')) return;
+  const handleSendBroadcast = async () => {
+    // Validation
+    if (!broadcastTitle.trim()) {
+      toast.error('Please enter a broadcast title');
+      return;
+    }
+
+    if (selectedChannel === 'email' && !broadcastSubject.trim()) {
+      toast.error('Please enter an email subject');
+      return;
+    }
+
+    if (!broadcastContent.trim()) {
+      toast.error('Please enter broadcast content');
+      return;
+    }
+
+    if (selectedRecipients.length === 0) {
+      toast.error('Please select at least one recipient');
+      return;
+    }
+
+    setIsSending(true);
 
     try {
-      const { error } = await supabase
+      // 1. Save broadcast to database
+      const { data: broadcastData, error: broadcastError } = await supabase
         .from('broadcasts')
-        .delete()
-        .eq('id', broadcast.id);
+        .insert([{
+          title: broadcastTitle,
+          subject: broadcastSubject,
+          content: broadcastContent,
+          channel: selectedChannel,
+          audience: selectedAudience,
+          recipient_count: selectedRecipients.length,
+          status: 'sending',
+          scheduled_date: scheduledDate || null,
+          created_at: new Date().toISOString(),
+        }])
+        .select()
+        .single();
 
-      if (error) throw error;
-      toast.success('Broadcast deleted successfully');
+      if (broadcastError) throw broadcastError;
+
+      // 2. Send via backend API
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      
+      const response = await fetch(`${API_URL}/send-broadcast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel: selectedChannel,
+          recipients: selectedRecipients.map(r => ({
+            name: r.name,
+            email: r.email,
+            phone: r.phone,
+          })),
+          subject: broadcastSubject,
+          content: broadcastContent,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send broadcast');
+      }
+
+      // 3. Log messages to message_logs
+      for (const recipient of selectedRecipients) {
+        await supabase.from('message_logs').insert({
+          broadcast_id: broadcastData.id,
+          subject: selectedChannel === 'email' ? broadcastSubject : null,
+          content: broadcastContent,
+          channel: selectedChannel,
+          recipient_name: recipient.name,
+          recipient_email: recipient.email,
+          recipient_phone: recipient.phone,
+          delivery_status: 'sent',
+          delivery_timestamp: new Date().toISOString(),
+        });
+      }
+
+      // 4. Update broadcast status
+      await supabase
+        .from('broadcasts')
+        .update({
+          status: 'completed',
+          sent_count: result.successful,
+          failed_count: result.failed,
+          sent_at: new Date().toISOString(),
+        })
+        .eq('id', broadcastData.id);
+
+      toast.success(
+        `Broadcast sent! ${result.successful} successful, ${result.failed} failed`
+      );
+
+      // Reset form
+      setBroadcastTitle('');
+      setBroadcastSubject('');
+      setBroadcastContent('');
+      setSelectedChannel('email');
+      setSelectedAudience('all');
+      setScheduledDate('');
+      setSelectedRecipients([]);
+      
+      setShowCreateModal(false);
       fetchBroadcasts();
-    } catch (error) {
-      console.error('Error deleting broadcast:', error);
-      toast.error('Failed to delete broadcast');
-    }
-  };
 
-  const handleViewAnalytics = (broadcast: any) => {
-    toast.info('Analytics view coming soon!');
+    } catch (error: any) {
+      console.error('Error sending broadcast:', error);
+      toast.error(error.message || 'Failed to send broadcast');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const getChannelIcon = (channel: string) => {
-    switch (channel) {
-      case 'email': return <Mail className="h-4 w-4" />;
-      case 'sms': return <Smartphone className="h-4 w-4" />;
-      case 'push': return <Bell className="h-4 w-4" />;
-      case 'whatsapp': return <MessageCircle className="h-4 w-4" />;
-      default: return <Mail className="h-4 w-4" />;
-    }
+    const icons: Record<string, any> = {
+      'email': Mail,
+      'sms': Smartphone,
+      'whatsapp': MessageCircle,
+    };
+    const Icon = icons[channel] || Mail;
+    return <Icon className="h-4 w-4" />;
   };
 
   const getStatusBadge = (status: string) => {
     const colors: Record<string, string> = {
-      'sending': 'bg-blue-100 text-blue-800',
-      'scheduled': 'bg-purple-100 text-purple-800',
-      'sent': 'bg-green-100 text-green-800',
       'completed': 'bg-green-100 text-green-800',
-      'paused': 'bg-yellow-100 text-yellow-800',
+      'sending': 'bg-blue-100 text-blue-800',
+      'scheduled': 'bg-yellow-100 text-yellow-800',
       'failed': 'bg-red-100 text-red-800',
-      'draft': 'bg-gray-100 text-gray-800',
     };
     return (
       <Badge className={colors[status] || 'bg-gray-100 text-gray-800'}>
@@ -198,280 +245,191 @@ const BroadcastsTab = forwardRef((props, ref) => {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+      <div className="flex flex-col items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        <p className="text-gray-500">Loading broadcasts...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-4">
-        <div className="text-red-600">Error loading broadcasts</div>
-        <p className="text-gray-500">Please try again later</p>
-        <Button onClick={fetchBroadcasts}>Retry</Button>
+        <p className="text-gray-500 mt-4">Loading broadcasts...</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header Section */}
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Broadcasts</h2>
-          <p className="text-gray-600 mt-1">Manage and monitor your communication campaigns</p>
+          <h2 className="text-2xl font-bold text-gray-900">Broadcast Messages</h2>
+          <p className="text-gray-600 mt-1">Send messages to multiple recipients at once</p>
         </div>
-        <Button onClick={() => setShowCreateModal(true)} className="bg-orange-500 hover:bg-orange-600">
+        <Button 
+          onClick={() => setShowCreateModal(true)}
+          className="bg-orange-500 hover:bg-orange-600"
+        >
           <Plus className="h-4 w-4 mr-2" />
           New Broadcast
         </Button>
       </div>
 
-      {/* Active Broadcasts */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Send className="h-5 w-5" />
-            Active Broadcasts
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {activeBroadcasts.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500 font-medium">No Active Broadcasts</p>
-              <p className="text-sm text-gray-400 mt-2">Create your first broadcast campaign to get started</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {activeBroadcasts.map((broadcast) => (
-                <div key={broadcast.id} className="border rounded-lg p-4 hover:bg-gray-50">
-                  <div className="flex items-start justify-between mb-3">
+      {/* Broadcast List */}
+      <div className="space-y-4">
+        {broadcasts.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Send className="h-12 w-12 text-gray-400 mb-4" />
+              <p className="text-gray-500 font-medium">No broadcasts yet</p>
+              <p className="text-sm text-gray-400 mt-2">Create your first broadcast to get started</p>
+            </CardContent>
+          </Card>
+        ) : (
+          broadcasts.map((broadcast) => (
+            <Card key={broadcast.id} className="hover:shadow-lg transition-shadow">
+              <CardContent className="pt-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-start gap-3 flex-1">
+                    {getChannelIcon(broadcast.channel)}
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        {getChannelIcon(broadcast.channel)}
-                        <h3 className="font-semibold">{broadcast.subject || 'Untitled Broadcast'}</h3>
-                        {getStatusBadge(broadcast.status)}
-                      </div>
-                      <p className="text-sm text-gray-600 mb-2">{broadcast.content.substring(0, 100)}...</p>
-                    </div>
-                    <div className="flex gap-2">
-                      {broadcast.status === 'sending' ? (
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          onClick={() => handlePause(broadcast)}
-                          title="Pause"
-                        >
-                          <Pause className="h-4 w-4" />
-                        </Button>
-                      ) : broadcast.status === 'paused' ? (
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          onClick={() => handleResume(broadcast)}
-                          title="Resume"
-                        >
-                          <Play className="h-4 w-4" />
-                        </Button>
-                      ) : null}
-                      <Button 
-                        size="sm" 
-                        variant="ghost"
-                        onClick={() => handleView(broadcast)}
-                        title="View"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                      <h3 className="text-lg font-bold">{broadcast.title}</h3>
+                      {broadcast.subject && (
+                        <p className="text-sm text-gray-600 mt-1">{broadcast.subject}</p>
+                      )}
+                      <p className="text-gray-600 mt-2 line-clamp-2">{broadcast.content}</p>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">
-                        {broadcast.sent_count || 0} / {broadcast.total_recipients || 0} sent
-                      </span>
-                      <span className="text-gray-600">
-                        {broadcast.total_recipients > 0 ? Math.round(((broadcast.sent_count || 0) / broadcast.total_recipients) * 100) : 0}%
-                      </span>
-                    </div>
-                    <Progress value={broadcast.total_recipients > 0 ? ((broadcast.sent_count || 0) / broadcast.total_recipients) * 100 : 0} />
-                    <div className="flex items-center gap-4 text-xs text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {broadcast.created_at ? new Date(broadcast.created_at).toLocaleDateString() : 'Unknown date'}
-                      </span>
-                      {(broadcast.failed_count || 0) > 0 && (
-                        <span className="text-red-600">{broadcast.failed_count} failed</span>
-                      )}
-                    </div>
+                  <div className="flex gap-2">
+                    {getStatusBadge(broadcast.status)}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* Broadcast History */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
-            Broadcast History
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {completedBroadcasts.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">No Broadcast History</p>
-              <p className="text-sm text-gray-400 mt-1">Completed broadcasts will appear here</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="border-b">
-                  <tr className="text-left">
-                    <th className="pb-3 font-medium text-gray-700">Campaign Details</th>
-                    <th className="pb-3 font-medium text-gray-700">Channel</th>
-                    <th className="pb-3 font-medium text-gray-700">Recipients</th>
-                    <th className="pb-3 font-medium text-gray-700">Status</th>
-                    <th className="pb-3 font-medium text-gray-700">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {completedBroadcasts.map((broadcast) => (
-                    <tr key={broadcast.id} className="hover:bg-gray-50">
-                      <td className="py-3">
-                        <div>
-                          <p className="font-medium">{broadcast.subject || 'Untitled Broadcast'}</p>
-                          <p className="text-sm text-gray-500 line-clamp-1">{broadcast.content.substring(0, 100)}...</p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            {broadcast.created_at ? new Date(broadcast.created_at).toLocaleDateString() : 'Unknown date'}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="py-3">
-                        <div className="flex items-center gap-2">
-                          {getChannelIcon(broadcast.channel)}
-                          <span className="capitalize">{broadcast.channel}</span>
-                        </div>
-                      </td>
-                      <td className="py-3">
-                        <div className="text-sm">
-                          <p className="font-medium">{(broadcast.total_recipients || 0).toLocaleString()}</p>
-                          <p className="text-gray-500">{broadcast.sent_count || 0} sent, {broadcast.failed_count || 0} failed</p>
-                        </div>
-                      </td>
-                      <td className="py-3">
-                        {getStatusBadge(broadcast.status)}
-                      </td>
-                      <td className="py-3">
-                        <div className="flex gap-1">
-                          <Button 
-                            size="sm" 
-                            variant="ghost"
-                            onClick={() => handleView(broadcast)}
-                            title="View"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="ghost"
-                            onClick={() => handleCopy(broadcast)}
-                            title="Duplicate"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="ghost"
-                            onClick={() => handleViewAnalytics(broadcast)}
-                            title="Analytics"
-                          >
-                            <BarChart3 className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="ghost"
-                            onClick={() => handleDelete(broadcast)}
-                            title="Delete"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600 border-t pt-4">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    {broadcast.recipient_count || 0} recipients
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    {broadcast.sent_count || 0} sent
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <XCircle className="h-4 w-4 text-red-600" />
+                    {broadcast.failed_count || 0} failed
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    {new Date(broadcast.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
 
-      {/* Preview Modal */}
-      <Dialog open={showPreviewModal} onOpenChange={setShowPreviewModal}>
-        <DialogContent className="max-w-2xl">
+      {/* Create Broadcast Modal */}
+      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Broadcast Preview</DialogTitle>
+            <DialogTitle>Create New Broadcast</DialogTitle>
           </DialogHeader>
-          {selectedBroadcast && (
+
+          <div className="space-y-6">
+            {/* Basic Info */}
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium text-gray-700">Subject</label>
-                <p className="text-lg font-semibold">{selectedBroadcast.subject}</p>
+                <Label>Broadcast Title</Label>
+                <Input
+                  value={broadcastTitle}
+                  onChange={(e) => setBroadcastTitle(e.target.value)}
+                  placeholder="Enter broadcast title..."
+                />
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">Channel</label>
-                <div className="flex items-center gap-2 mt-1">
-                  {getChannelIcon(selectedBroadcast.channel)}
-                  <span className="capitalize">{selectedBroadcast.channel}</span>
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">Content</label>
-                <div className="mt-2 p-4 bg-gray-50 rounded-lg border">
-                  <p className="whitespace-pre-wrap">{selectedBroadcast.content}</p>
-                </div>
-              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Audience</label>
-                  <p>{selectedBroadcast.audience || 'All Users'}</p>
+                  <Label>Channel</Label>
+                  <Select value={selectedChannel} onValueChange={setSelectedChannel}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="sms">SMS</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Total Recipients</label>
-                  <p>{(selectedBroadcast.total_recipients || 0).toLocaleString()}</p>
+                  <Label>Audience</Label>
+                  <Select value={selectedAudience} onValueChange={handleAudienceChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Users</SelectItem>
+                      <SelectItem value="members">Members Only</SelectItem>
+                      <SelectItem value="donors">Donors</SelectItem>
+                      <SelectItem value="volunteers">Volunteers</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+
+              {selectedChannel === 'email' && (
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Sent</label>
-                  <p className="text-green-600">{selectedBroadcast.sent_count || 0}</p>
+                  <Label>Email Subject</Label>
+                  <Input
+                    value={broadcastSubject}
+                    onChange={(e) => setBroadcastSubject(e.target.value)}
+                    placeholder="Enter email subject..."
+                  />
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Failed</label>
-                  <p className="text-red-600">{selectedBroadcast.failed_count || 0}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Status</label>
-                  <div>{getStatusBadge(selectedBroadcast.status)}</div>
-                </div>
+              )}
+
+              <div>
+                <Label>Message Content</Label>
+                <Textarea
+                  value={broadcastContent}
+                  onChange={(e) => setBroadcastContent(e.target.value)}
+                  placeholder="Enter your message..."
+                  rows={8}
+                />
+              </div>
+
+              <div>
+                <Label>Recipients: {selectedRecipients.length}</Label>
+                <p className="text-sm text-gray-500 mt-1">
+                  {selectedRecipients.length} users will receive this broadcast
+                </p>
               </div>
             </div>
-          )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowCreateModal(false)}
+              disabled={isSending}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSendBroadcast}
+              disabled={isSending}
+              className="bg-orange-500 hover:bg-orange-600"
+            >
+              {isSending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Send Broadcast
+                </>
+              )}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
-
-      <CreateBroadcastModal 
-        open={showCreateModal} 
-        onOpenChange={setShowCreateModal}
-        onSuccess={fetchBroadcasts}
-      />
     </div>
   );
 });
